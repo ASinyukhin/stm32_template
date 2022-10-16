@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Cortex Debug",
+        "cwd": "${workspaceRoot}",
+        "executable": "${workspaceRoot}/build/${workspaceFolderBasename}.elf",
+        "request": "launch",
+        "type": "cortex-debug",
+        "servertype": "openocd",
+        "device": "STM32F103",
+        "configFiles": [
+          "interface/stlink-v2.cfg",
+          "target/stm32f1x.cfg"
+        ],
+        "preLaunchTask": "flash-openocd",
+        "showDevDebugOutput": "raw",
+        "svdFile": "${workspaceRoot}/debug-files/STM32F103xx.svd"
+      }
+    ]
+  }
