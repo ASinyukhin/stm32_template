@@ -1,0 +1,13 @@
+CMakeFiles/
+build/
+.idea
+*.cbp
+*.bak
+*.bin
+*.elf
+*.hex
+*.map
+CMakeCache.txt
+[M,m]akefile
+
+
