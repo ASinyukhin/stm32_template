@@ -13,7 +13,7 @@
           "interface/stlink-v2.cfg",
           "target/stm32f1x.cfg"
         ],
-        "preLaunchTask": "flash-openocd",
+        "preLaunchTask": "build-debug",
         "showDevDebugOutput": "raw",
         "svdFile": "${workspaceRoot}/debug-files/STM32F103xx.svd"
       }
