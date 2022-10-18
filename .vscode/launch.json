@@ -4,7 +4,7 @@
       {
         "name": "Cortex Debug",
         "cwd": "${workspaceRoot}",
-        "executable": "${workspaceRoot}/build/${workspaceFolderBasename}.elf",
+        "executable": "${workspaceRoot}/build/stm32_template.elf",
         "request": "launch",
         "type": "cortex-debug",
         "servertype": "openocd",

@@ -17,7 +17,7 @@
         {
             "type": "shell",
             "label": "flash-openocd",
-            "command": "echo \"program ${workspaceFolder}/build/${workspaceFolder}.bin 0x08000000\" | telnet localhost 50002; true",
+            "command": "echo \"program ${workspaceFolder}/build/${workspaceFolder}.bin 0x08000000\"",
             "dependsOn": "build-debug",
             "problemMatcher": [],
             "group": "build"
@@ -25,7 +25,7 @@
         {
             "type": "cppbuild",
             "label": "C/C++: arm-none-eabi-gcc build active file",
-            "command": "/usr/bin/arm-none-eabi-gcc",
+            "command": "${env:ARM_TOOLCHAIN_PATH}arm-none-eabi-gcc",
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",
