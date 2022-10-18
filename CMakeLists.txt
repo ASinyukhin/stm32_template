@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
+set(CMAKE_VERBOSE_MAKEFILE 1)
 
 # Disable compiler checking
 # Otherwise it will fall with `reference to _exit() not found` error
@@ -56,6 +57,45 @@ set(SOURCE_FILES
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/.gdbinit DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 
 add_executable(${TARGET_NAME} ${SOURCE_FILES})
+
+add_dependencies(${TARGET_NAME} opencm3)
+
+#add_custom_target(opencm3 
+#    COMMAND "make TARGETS='stm32/f1'"
+#    WORKING_DIRECTORY ${PROJECT_DIR}/libs/libopencm3
+#)
+#target_link_libraries(${PROJECT_NAME} opencm3)
+
+# Option TARGETS not working for me now
+set(TEST_PATH ${PROJECT_SOURCE_DIR}/libs/test)
+message("Libopencm3 path=" ${TEST_PATH})
+include(ExternalProject)
+ExternalProject_Add(test
+    SOURCE_DIR ${TEST_PATH}
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND 
+    CC=${CMAKE_C_COMPILER}
+    AR=${ARM_TOOLCHAIN_PATH}arm-none-eabi-ar
+    make -C <SOURCE_DIR> OPT="-O0" TARGETS="stm32/f1"
+    BUILD_IN_SOURCE TRUE
+    INSTALL_COMMAND ""
+)
+
+### Trying libopencm3
+
+set(OPENCM3_PATH ${PROJECT_SOURCE_DIR}/libs/libopencm3)
+include(ExternalProject)
+ExternalProject_Add(opencm3
+    SOURCE_DIR ${OPENCM3_PATH}
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND 
+    PREFIX=${ARM_TOOLCHAIN_PATH}arm-none-eabi-
+    make -C <SOURCE_DIR> TARGETS="stm32/f1"
+    BUILD_IN_SOURCE TRUE
+    INSTALL_COMMAND ""
+)
+
+#target_link_libraries(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/libs/libopencm3/libopencm3.a)
 
 # Targets for make firmware in different formats
 set(BIN_TARGET "${EXECUTABLE_OUTPUT_PATH}/${TARGET_NAME}.bin")
