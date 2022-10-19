@@ -44,6 +44,7 @@ add_definitions(-DSTM32F103C8)
 add_definitions(-DSTM32F10X_MD)
 # We don't use SPL in out template
 # add_definitions(-DUSE_STDPERIPH_DRIVER)
+add_definitions(-DSTM32F1)
 
 include_directories(cmsis)
 include_directories(stm32)
@@ -60,12 +61,7 @@ add_executable(${TARGET_NAME} ${SOURCE_FILES})
 
 add_dependencies(${TARGET_NAME} opencm3)
 
-#add_custom_target(opencm3 
-#    COMMAND "make TARGETS='stm32/f1'"
-#    WORKING_DIRECTORY ${PROJECT_DIR}/libs/libopencm3
-#)
-#target_link_libraries(${PROJECT_NAME} opencm3)
-
+# May be useful when developing custom library
 # Option TARGETS not working for me now
 #set(TEST_PATH ${PROJECT_SOURCE_DIR}/libs/test)
 #message("Libopencm3 path=" ${TEST_PATH})
@@ -81,11 +77,11 @@ add_dependencies(${TARGET_NAME} opencm3)
 #    INSTALL_COMMAND ""
 #)
 
-### Trying libopencm3
 
 set(OPENCM3_PATH ${PROJECT_SOURCE_DIR}/libs/libopencm3)
+# It's a library build target from external makefile
 include(ExternalProject)
-ExternalProject_Add(opencm3
+ExternalProject_Add(opencm3_build
     SOURCE_DIR ${OPENCM3_PATH}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND 
@@ -96,7 +92,22 @@ ExternalProject_Add(opencm3
     INSTALL_COMMAND ""
 )
 
-#target_link_libraries(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/libs/libopencm3/libopencm3.a)
+# Public include dirs for lib
+set(OPENCM3_INC_DIRS "${OPENCM3_PATH}/include")
+
+# Speciry library name to import
+add_library(opencm3 STATIC IMPORTED)
+
+# Library must be build via `opencm3_build` before linking
+add_dependencies(opencm3 opencm3_build)
+
+# Set location of library and it's public headers
+set_target_properties(opencm3 PROPERTIES
+    IMPORTED_LOCATION ${OPENCM3_PATH}/lib/libopencm3_stm32f1.a
+    INTERFACE_INCLUDE_DIRECTORIES ${OPENCM3_INC_DIRS}
+)
+
+target_link_libraries(${PROJECT_NAME} opencm3)
 
 # Targets for make firmware in different formats
 set(BIN_TARGET "${EXECUTABLE_OUTPUT_PATH}/${TARGET_NAME}.bin")
