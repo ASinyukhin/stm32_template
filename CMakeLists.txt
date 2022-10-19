@@ -67,19 +67,19 @@ add_dependencies(${TARGET_NAME} opencm3)
 #target_link_libraries(${PROJECT_NAME} opencm3)
 
 # Option TARGETS not working for me now
-set(TEST_PATH ${PROJECT_SOURCE_DIR}/libs/test)
-message("Libopencm3 path=" ${TEST_PATH})
-include(ExternalProject)
-ExternalProject_Add(test
-    SOURCE_DIR ${TEST_PATH}
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND 
-    CC=${CMAKE_C_COMPILER}
-    AR=${ARM_TOOLCHAIN_PATH}arm-none-eabi-ar
-    make -C <SOURCE_DIR> OPT="-O0" TARGETS="stm32/f1"
-    BUILD_IN_SOURCE TRUE
-    INSTALL_COMMAND ""
-)
+#set(TEST_PATH ${PROJECT_SOURCE_DIR}/libs/test)
+#message("Libopencm3 path=" ${TEST_PATH})
+#include(ExternalProject)
+#ExternalProject_Add(test
+#    SOURCE_DIR ${TEST_PATH}
+#    CONFIGURE_COMMAND ""
+#    BUILD_COMMAND 
+#    CC=${CMAKE_C_COMPILER}
+#    AR=${ARM_TOOLCHAIN_PATH}arm-none-eabi-ar
+#    make -C <SOURCE_DIR> OPT="-O0" TARGETS="stm32/f1"
+#    BUILD_IN_SOURCE TRUE
+#    INSTALL_COMMAND ""
+#)
 
 ### Trying libopencm3
 
@@ -90,7 +90,8 @@ ExternalProject_Add(opencm3
     CONFIGURE_COMMAND ""
     BUILD_COMMAND 
     PREFIX=${ARM_TOOLCHAIN_PATH}arm-none-eabi-
-    make -C <SOURCE_DIR> TARGETS="stm32/f1"
+    TARGETS=stm32/f1
+    make -C <SOURCE_DIR>
     BUILD_IN_SOURCE TRUE
     INSTALL_COMMAND ""
 )
