@@ -29,10 +29,9 @@ void TIM2_IRQHandler(void) {
 }
 
 int __attribute((noreturn)) main(void) {
+	#if 0
 	//RCC_APB2ENR |= RCC_APB2ENR_IOPCEN; //TODO: check for rcc_ function to enable gpio clock
 	rcc_periph_clock_enable(RCC_GPIOC);
-	rcc_periph_clock_enable(RCC_USART2);
-
 	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
 
 	/* Timer blinking example */
@@ -52,5 +51,41 @@ int __attribute((noreturn)) main(void) {
 
 	while (1) {
 		__asm volatile ("nop");
+	}
+	#endif 
+	/* Multiple blinking example */
+	rcc_periph_clock_enable(RCC_GPIOC);
+	rcc_periph_clock_enable(RCC_GPIOB);
+
+	int nOutputLines = 4;
+	uint32_t ports[] = {GPIOC, GPIOB, GPIOB, GPIOB};
+	uint16_t pins[] = {GPIO13, GPIO9, GPIO8, GPIO7};
+	uint32_t periods[] = {4000000, 1500000, 2000000, 1500000};
+	/* Configure ports */
+	for (int i=0; i<nOutputLines; i++) {
+		gpio_set_mode(ports[i], GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, pins[i]);
+	}
+
+	uint32_t phases[nOutputLines]; // delay to next state change
+	// set initial phases
+	for (int i=0; i<nOutputLines; i++) {
+		phases[i] = periods[i];
+	}
+	phases[3] = 2 * periods[3];
+	while (1) {
+		/* choose min. time to next state change */
+		uint32_t tau = phases[0];
+		for (int i=0; i<nOutputLines; i++) {
+			if (phases[i] < tau)
+				tau = phases[i];
+		}
+		delay(tau);
+		for (int i=0; i<nOutputLines; i++) {
+			phases[i] -= tau;
+			if (phases[i] == 0) { //It's time to change state
+				gpio_toggle(ports[i], pins[i]);
+				phases[i] = periods[i]; // reload period value
+			}
+		}
 	}
 }
