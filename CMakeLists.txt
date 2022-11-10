@@ -59,7 +59,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/.gdbinit DESTINATION ${EXECUTABLE_OUTPUT_P
 
 add_executable(${TARGET_NAME} ${SOURCE_FILES})
 
-add_dependencies(${TARGET_NAME} opencm3)
+#add_dependencies(${TARGET_NAME} opencm3)
 
 # May be useful when developing custom library
 # Option TARGETS not working for me now
@@ -78,36 +78,36 @@ add_dependencies(${TARGET_NAME} opencm3)
 #)
 
 
-set(OPENCM3_PATH ${PROJECT_SOURCE_DIR}/libs/libopencm3)
+#set(OPENCM3_PATH ${PROJECT_SOURCE_DIR}/libs/libopencm3)
 # It's a library build target from external makefile
-include(ExternalProject)
-ExternalProject_Add(opencm3_build
-    SOURCE_DIR ${OPENCM3_PATH}
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND 
-    PREFIX=${ARM_TOOLCHAIN_PATH}arm-none-eabi-
-    TARGETS=stm32/f1
-    make -C <SOURCE_DIR>
-    BUILD_IN_SOURCE TRUE
-    INSTALL_COMMAND ""
-)
+#include(ExternalProject)
+#ExternalProject_Add(opencm3_build
+#    SOURCE_DIR ${OPENCM3_PATH}
+#    CONFIGURE_COMMAND ""
+#    BUILD_COMMAND 
+#    PREFIX=${ARM_TOOLCHAIN_PATH}arm-none-eabi-
+#    TARGETS=stm32/f1
+#    make -C <SOURCE_DIR>
+#    BUILD_IN_SOURCE TRUE
+#    INSTALL_COMMAND ""
+#)
 
 # Public include dirs for lib
-set(OPENCM3_INC_DIRS "${OPENCM3_PATH}/include")
+#set(OPENCM3_INC_DIRS "${OPENCM3_PATH}/include")
 
 # Speciry library name to import
-add_library(opencm3 STATIC IMPORTED)
+#add_library(opencm3 STATIC IMPORTED)
 
 # Library must be build via `opencm3_build` before linking
-add_dependencies(opencm3 opencm3_build)
+#add_dependencies(opencm3 opencm3_build)
 
 # Set location of library and it's public headers
-set_target_properties(opencm3 PROPERTIES
-    IMPORTED_LOCATION ${OPENCM3_PATH}/lib/libopencm3_stm32f1.a
-    INTERFACE_INCLUDE_DIRECTORIES ${OPENCM3_INC_DIRS}
-)
+#set_target_properties(opencm3 PROPERTIES
+#    IMPORTED_LOCATION ${OPENCM3_PATH}/lib/libopencm3_stm32f1.a
+#    INTERFACE_INCLUDE_DIRECTORIES ${OPENCM3_INC_DIRS}
+#)
 
-target_link_libraries(${PROJECT_NAME} opencm3)
+#target_link_libraries(${PROJECT_NAME} opencm3)
 
 # Targets for make firmware in different formats
 set(BIN_TARGET "${EXECUTABLE_OUTPUT_PATH}/${TARGET_NAME}.bin")
