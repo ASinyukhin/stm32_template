@@ -1,12 +1,7 @@
 #include <stdint.h>
+#include <stddef.h>
 #include <stm32f10x.h> //Not used when we use libopencm3
 #include <stdbool.h>
-/*
-#include <libopencm3/stm32/gpio.h>
-#include <libopencm3/stm32/rcc.h>
-#include <libopencm3/stm32/timer.h>
-#include <libopencmsis/core_cm3.h>
-*/
 #include <system_stm32f10x.h>
 
 void delay(uint32_t ticks) {
@@ -37,31 +32,14 @@ void HardFault_Handler(void) {
 	}
 }
 
-/*
-//If we use CMSIC interrupts table, we do not want have them redefined in libopencmsis
-//Otherwise we should use only libopencm3 irq table and it's startup
-#undef TIM2_IRQHandler
-//This is a workaround and should be fixed in future
-void TIM2_IRQHandler(void) {
-	gpio_toggle(GPIOC, GPIO13);
-	timer_clear_flag(TIM2, TIM_SR_UIF);
-}
-*/
+/************************************************************/
 
-void TIM2_IRQHandler(void) {
-	if (TIM2->SR & TIM_SR_UIF) {
-		uint32_t _gpios = GPIOC->ODR;
-		GPIOC->BSRR = ((_gpios & (1<<13)) << 16) | 
-			(~_gpios & (1<<13));
-		TIM2->SR &= ~TIM_SR_UIF; //Clear Interrupt flag
-	}
-}
+#define DISPLAY_H 64
+#define DISPLAY_W 130
 
-//#define LED_PORT GPIOC
-//#define LED_PIN  GPIO13
+#define BUF_SIZE ((DISPLAY_H/8) * DISPLAY_W)
 
-//#define BTN_PORT GPIOB
-//#define BTN_PIN  GPIO6
+static uint8_t PixBuff[BUF_SIZE] = {0};
 
 void SPI_send(SPI_TypeDef *spi, uint16_t data) {
 	while (!(spi->SR & SPI_SR_TXE)) ;
@@ -110,9 +88,10 @@ void SPI_init() {
 	SPI_deselect();
 	
 	SPI1->CR2 = 0;
-	SPI1->CR1 = SPI_CR1_BR_0|SPI_CR1_BR_1|SPI_CR1_BR_2|
+	SPI1->CR1 = SPI_CR1_BR_0| // SPI_CR1_BR_2| // SPI_CR1_BR_0|SPI_CR1_BR_1|SPI_CR1_BR_2|
 		SPI_CR1_SSM |
 		SPI_CR1_SSI | SPI_CR1_MSTR;
+	SPI1->CR1 |= SPI_CR1_CPOL|SPI_CR1_CPHA;
 }
 
 bool SPI_echo_test() {
@@ -126,242 +105,179 @@ bool SPI_echo_test() {
 	return (read1 == 0xAA && read2 == 55);
 }
 
+#define RS_LINE_NO  (4)
+#define RST_LINE_NO (3)
+
+#define GPIO_WRITE_BIT(bit, level) do {\
+	GPIOA->BSRR = ((~(level) & 1) << ((bit) + 16)) | (((level) & 1) << (bit));\
+} while (0)
+
+#define DISPLAY_SET_RS(level) GPIO_WRITE_BIT(RS_LINE_NO, level)
+#define DISPLAY_RESET(level)  GPIO_WRITE_BIT(RST_LINE_NO, level)
+
+#define DISPLAY_ON            ((uint8_t) 0b10101111)
+#define DIPLAY_SET_START_LINE ((uint8_t) 0b01000000)
+#define DISPLAY_SET_PAGE_ADDR ((uint8_t) 0b10110000)
+
+void displaySendCmd(uint8_t cmd) {
+	DISPLAY_SET_RS(false); //command
+	SPI_send(SPI1, cmd);
+	SPI_waitBusy(SPI1);
+}
+
+void displaySendData(uint8_t data) {
+	DISPLAY_SET_RS(true); //data
+	SPI_send(SPI1, data);
+	SPI_waitBusy(SPI1);
+}
+
+void displaySendMultiple(uint8_t *data, size_t count) {
+	DISPLAY_SET_RS(true);
+	for (int i=0; i<count; i++) {
+		SPI_send(SPI1, data[i]);
+	}
+	SPI_waitBusy(SPI1);
+}
+
+static void clearPixBuf() {
+	for (int i=0; i<BUF_SIZE; i++)
+		PixBuff[i] = 0;
+}
+
+// Fast copying from pixbuf into a DDRAM
+void displayBlitScreen() {
+	SPI_select();
+	for (int page=0; page<8; page++) {
+		displaySendCmd(0xB0 | page);
+		displaySendMultiple(&PixBuff[page * DISPLAY_W], DISPLAY_W);
+		displaySendCmd(0xEE);
+	}
+	SPI_deselect();
+}
+
+// Fast blit rectangle onto display DDRAM
+void displayBlitRect(int x, int y, int w, int h) {
+	SPI_select();
+	uint8_t page_start = (y / 8) & 0x0F;
+	uint8_t page_end = ((y + h) / 8);
+	if (page_end >= 7)
+		page_end = 7;
+
+	uint8_t msb = (x >> 4) & 0x0F;
+	uint8_t lsb = x & 0x0F;
+
+	for (int page=page_start; page <= page_end; page++) {
+		displaySendCmd(0xB0 | page);
+		displaySendCmd(0b00010000 | msb);
+		displaySendCmd(0b00000000 | lsb);
+		displaySendMultiple(&PixBuff[page * DISPLAY_W], w);
+		displaySendCmd(0xEE);
+	}
+	SPI_deselect();
+}
+
+void displayClear() {
+	SPI_select();
+	displaySendCmd(0x40 | 0x00); // Set start line address (Lines 0x00...0x3F)
+	for(int k=0; k<=7; k++) { // Clear DRAM
+    	displaySendCmd(0xB0 | k); // Set Page 0 (Pages 0x00...0x0F)
+    	for(int i=0; i<DISPLAY_W; i++)
+			displaySendData(0x0); //displaySendData(0b01010101);
+    	displaySendCmd(0xEE); // End writing to the page, return the page address back
+  	}
+	clearPixBuf();
+	SPI_deselect();
+}
+
+void pixbufSetPixel(int x, int y, bool color) {
+	uint8_t safe_x = x % DISPLAY_W;
+	uint8_t page = (y / 8) & 0x0F;
+	int place = page * DISPLAY_W + safe_x;
+	uint8_t data = PixBuff[place]; //one small column
+	// clear pixel and set new value
+	uint8_t new_data = data & ~(1 << (y % 8)) | (color << (y % 8));
+	PixBuff[place] = new_data;
+}
+
+// Put Pixel into DRAM. Slow implementation
+void displayPutPixel(int x, int y, bool color) { //x in [0..64], y in [0..130]
+	uint8_t safe_x = x % DISPLAY_W;
+	SPI_select();
+	uint8_t page = (y / 8) & 0x0F;
+	uint8_t msb = (x >> 4) & 0x0F;
+	uint8_t lsb = x & 0x0F;
+	//set page address
+	displaySendCmd(0b10110000 | page);
+	//Column address set msb
+	displaySendCmd(0b00010000 | msb);
+	//Column address set lsb
+	displaySendCmd(0b00000000 | lsb);
+	int place = page * DISPLAY_W + safe_x;
+	uint8_t data = PixBuff[place]; //one small column
+	// clear pixel and set new value
+	uint8_t new_data = data & ~(1 << (y % 8)) | (color << (y % 8));
+	displaySendData(new_data);
+	PixBuff[place] = new_data;
+	SPI_deselect();
+}
+
+void displayInit() {
+	SPI_select();
+	DISPLAY_RESET(false);
+	delay_us(10000); //10ms
+	DISPLAY_RESET(true);
+	delay_us(1000);
+	/* LCD bias setting (11) */
+	displaySendCmd(0b10100011); //1/7 bias
+	/* ADC selection */
+	displaySendCmd(0b10100000);
+	/* Common output mode selection */
+	displaySendCmd(0b11000000);
+	/* Power control mode */
+	displaySendCmd(0x28 | 0b111);  //0b111
+	/* Vo regulator resistor ratio (check) */
+	uint8_t resRatio = 0x04;
+	displaySendCmd(0b00100000 | resRatio);
+  	displaySendCmd(0xA6); // Normal color, A7 = inverse color
+  	displaySendCmd(0xAF); // Display on
+	SPI_deselect();
+}
+
 int __attribute((noreturn)) main(void) {
-	/* Timer blinking example */
-	#if 0
-	//RCC_APB2ENR |= RCC_APB2ENR_IOPCEN; //TODO: check for rcc_ function to enable gpio clock
-	rcc_periph_clock_enable(RCC_GPIOC);
-	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
-
-	/* Timer blinking example */
-	uint32_t tim_pre = 1024;
-	rcc_periph_clock_enable(RCC_TIM2);
-	rcc_periph_reset_pulse(RST_TIM2);
-
-	timer_set_mode(TIM2, TIM_CR1_CKD_CK_INT, TIM_CR1_CMS_EDGE, TIM_CR1_DIR_UP);
-	timer_set_prescaler(TIM2, tim_pre);
-	timer_disable_preload(TIM2);
-	timer_set_period(TIM2, 30000);
-	timer_enable_irq(TIM2, TIM_DIER_UIE); //update IRQ
-	
-	nvic_enable_irq(NVIC_TIM2_IRQ);
-	nvic_clear_pending_irq(NVIC_TIM2_IRQ);
-	timer_enable_counter(TIM2);
-
-	while (1) {
-		__asm volatile ("nop");
-	}
-	#endif 
-	/* Multiple blinking example */
-	#if 0
-	rcc_periph_clock_enable(RCC_GPIOC);
-	rcc_periph_clock_enable(RCC_GPIOB);
-
-	int nOutputLines = 4;
-	uint32_t ports[] = {GPIOC, GPIOB, GPIOB, GPIOB};
-	uint16_t pins[] = {GPIO13, GPIO9, GPIO8, GPIO7};
-	uint32_t periods[] = {4000000, 1500000, 2000000, 1500000};
-	/* Configure ports */
-	for (int i=0; i<nOutputLines; i++) {
-		gpio_set_mode(ports[i], GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, pins[i]);
-	}
-
-	uint32_t phases[nOutputLines]; // delay to next state change
-	// set initial phases
-	for (int i=0; i<nOutputLines; i++) {
-		phases[i] = periods[i];
-	}
-	phases[3] = 2 * periods[3];
-	while (1) {
-		/* choose min. time to next state change */
-		uint32_t tau = phases[0];
-		for (int i=0; i<nOutputLines; i++) {
-			if (phases[i] < tau)
-				tau = phases[i];
-		}
-		delay(tau);
-		for (int i=0; i<nOutputLines; i++) {
-			phases[i] -= tau;
-			if (phases[i] == 0) { //It's time to change state
-				gpio_toggle(ports[i], pins[i]);
-				phases[i] = periods[i]; // reload period value
-			}
-		}
-	}
-	#endif
-	/* Start/stop blinking via button */
-	#if 0 //libopencm3 version
-	rcc_periph_clock_enable(RCC_GPIOC);
-	rcc_periph_clock_enable(RCC_GPIOB); 
-
-	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
-	gpio_set_mode(GPIOB, GPIO_MODE_INPUT, GPIO_CNF_INPUT_PULL_UPDOWN, GPIO6);
-	gpio_set(GPIOB, GPIO6);
-
-	uint32_t btnPeriod = 10000;
-	uint32_t ledPeriod = 1000000;
-	uint32_t btnPhase = btnPeriod;
-	uint32_t ledPhase = ledPeriod;
-	bool ledEnabled = true;
-
-	bool buttonPrevState = gpio_get(GPIOB, GPIO6);
-
-	while (1) {
-		uint32_t tau = btnPhase;
-		if (ledPhase < tau)
-			tau = ledPhase;
-		delay(tau);
-		ledPhase -= tau;
-		btnPhase -= tau;
-		if (btnPhase == 0) { //It's time to check button state
-			btnPhase = btnPeriod;
-			bool buttonNewState = gpio_get(GPIOB, GPIO6);
-			GPIOB->IDR;
-			if (!buttonNewState && buttonPrevState) { // button line change level 1->0 
-				ledEnabled = !ledEnabled; // Logical NOT operation
-			}
-			buttonPrevState = buttonNewState;
-		}
-		if (ledPhase == 0) { //It's time to change led state
-			if (ledEnabled)
-				gpio_toggle(GPIOC, GPIO13);
-			ledPhase = ledPeriod;
-		}
-	}
-	#endif
-
-	#if 0 // CMSIS version
-	RCC->APB2ENR = RCC_APB2ENR_IOPBEN|RCC_APB2ENR_IOPCEN;
-	// push-pull mode GPIOC pin 13
-	GPIOC->CRH = GPIOC->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13) | GPIO_CRH_MODE13_0;
-	// input pull up mode GPIOB pin 6
-	GPIOB->CRL = GPIOB->CRL & ~(GPIO_CRL_CNF6 | GPIO_CRL_MODE6) | GPIO_CRL_CNF6_1;
-	// enable pull up
-	GPIOB->ODR |= (1 << 6);
-
-	uint32_t btnPeriod = 10000;
-	uint32_t ledPeriod = 1000000;
-	uint32_t btnPhase = btnPeriod;
-	uint32_t ledPhase = ledPeriod;
-	bool ledEnabled = true;
-
-	bool buttonPrevState = GPIOB->IDR & (1 << 6); // check bit 6 corresponding to pin 6
-
-	while (1) {
-		uint32_t tau = btnPhase;
-		if (ledPhase < tau)
-			tau = ledPhase;
-		delay_us(tau);
-		ledPhase -= tau;
-		btnPhase -= tau;
-		if (btnPhase == 0) { //It's time to check button state
-			btnPhase = btnPeriod;
-			bool buttonNewState = GPIOB->IDR & (1 << 6);
-			if (!buttonNewState && buttonPrevState) { // button line change level 1->0 
-				ledEnabled = !ledEnabled; // Logical NOT operation
-			}
-			buttonPrevState = buttonNewState;
-		}
-		if (ledPhase == 0) { //It's time to change led state
-			if (ledEnabled) {
-				// toggle with BSRR register
-				uint32_t _gpios = GPIOC->ODR;
-				GPIOC->BSRR = ((_gpios & (1<<13)) << 16) | (~_gpios & (1<<13));
-			}
-			ledPhase = ledPeriod;
-		}
-	}
-	#endif
-	#if 0
-	/* CMSIS Simple timer example */
-	// Init GPIO
-	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
-	GPIOC->CRH = GPIOC->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13) | GPIO_CRH_MODE13_0;
-	// Init timer
-	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST;
-	RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM2RST;
-
-	TIM2->PSC = 36 * 1000 - 1;
-	TIM2->ARR = 100;
-	TIM2->DIER |= TIM_DIER_UIE; // Enable Update Interrupt in Timer
-	NVIC_ClearPendingIRQ(TIM2_IRQn);
-	NVIC_EnableIRQ(TIM2_IRQn); // Enable IRQ in NVIC
-	TIM2->CR1 |= TIM_CR1_CEN; // Start timer
-	while (1) {
-		__asm volatile ("nop");
-	}
-	#endif
-	/* CMSIS Timer PWM example */
-	// Init timer
-	#if 0
-	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST;
-	RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM2RST;
-
-	//TIM2_CH2
-	// Init GPIO in Alternative function push-pull mode
-	RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
-	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
-	GPIOA->CRL = GPIOA->CRL & ~(GPIO_CRL_CNF1 | GPIO_CRL_MODE1) | GPIO_CRL_CNF1_1 | GPIO_CRL_MODE1_0;
-
-	TIM2->PSC = 36 - 1;
-	TIM2->ARR = 1024;
-	TIM2->CCR2 = 10;
-	TIM2->CR1 |= TIM_CR1_ARPE;
-	TIM2->CCMR1 |= TIM_CCMR1_OC2M_1|TIM_CCMR1_OC2M_2; //set PWM mode for channel
-	TIM2->CCER |= TIM_CCER_CC2E; //Enable timer channel out
-	TIM2->CR1 |= TIM_CR1_CEN; // Start timer
-	while (1) {
-		__asm volatile ("nop");
-	}
-	#endif
-
-	#if 0
-	/* Simple timer example: blink on port PC13 */
-	// Init GPIO PC13
-	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
-	GPIOC->CRH = GPIOC->CRH & ~(GPIO_CRH_CNF13|GPIO_CRH_MODE13) | GPIO_CRH_MODE13_0;
-	GPIOC->CRH = GPIOC->CRH & ~(GPIO_CRH_CNF14|GPIO_CRH_MODE14) | GPIO_CRH_CNF14_1;
-	GPIOC->ODR |= GPIO_ODR_ODR14; //pullup
-	// TIM2
-	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-	// reset TIMER
-	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST;
-	RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM2RST;
-	TIM2->PSC = 36000 - 1; //1tick = 1ms
-	TIM2->ARR = 1000;
-	TIM2->DIER |= TIM_DIER_UIE;
-	NVIC_ClearPendingIRQ(TIM2_IRQn);
-	NVIC_EnableIRQ(TIM2_IRQn);
-	bool btn_prev = false;
-	while (1) {
-		bool btn_state = ! (GPIOC->IDR & (1<<14));
-		if (btn_state && !btn_prev) { //button is pressed
-			if (TIM2->CR1 & TIM_CR1_CEN) {
-				TIM2->CR1 &= ~TIM_CR1_CEN; //stop
-			} else {
-				TIM2->CR1 |= TIM_CR1_CEN; //start
-			}
-		}
-		btn_prev = btn_state;
-		delay_us(10000); //10ms
-	}
-	#endif
-	
 	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
 	GPIOC->CRH = GPIOC->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13) | GPIO_CRH_MODE13_0;
 	SPI_init();
+	//Init additional lines (RS/A0 and RST)
+	GPIOA->CRL = GPIOA->CRL & ~(GPIO_CRL_CNF4|GPIO_CRL_MODE4 |
+		GPIO_CRL_CNF3|GPIO_CRL_MODE3) |
+		GPIO_CRL_MODE3_1|GPIO_CRL_MODE3_0|
+		GPIO_CRL_MODE4_1|GPIO_CRL_MODE4_0;
 
 	// enable SPI
 	SPI1->CR1 |= SPI_CR1_SPE;
+	/* Init display */
+	displayInit();
 
+	displayClear();
+
+	uint32_t shift = 0;
 	while (1) {
 		/* test SPI code */
-
 		GPIOC->ODR |= GPIO_ODR_ODR13;
-		delay_us(250000);
+		clearPixBuf();
+		for (int i=0; i<DISPLAY_W; i+=4) {
+			for (int j=0; j<DISPLAY_H; j+=4) {
+				int i_new = (i + shift) % DISPLAY_W;
+				int j_new = (j + shift) % DISPLAY_H;
+				pixbufSetPixel(i_new, j_new, true);
+			}
+		}
+		if (shift == 0)
+			displayBlitScreen();
+		else
+			displayBlitRect(0, 0, 16, 16);
 		GPIOC->ODR &= ~GPIO_ODR_ODR13;
 		delay_us(250000);
+		shift = (shift + 1) % 4;
 	}
 }
