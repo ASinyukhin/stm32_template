@@ -6,7 +6,7 @@
 #include <stdbool.h>
 
 #define DISPLAY_H 64
-#define DISPLAY_W 130
+#define DISPLAY_W 128
 
 #define GPIO_WRITE_BIT(bit, level) do {\
 	GPIOA->BSRR = ((~(level) & 1) << ((bit) + 16)) | (((level) & 1) << (bit));\
@@ -34,6 +34,8 @@ void displayBlitRect(int x, int y, int w, int h);
 void displayClear();
 
 void pixbufSetPixel(int x, int y, bool color);
+
+void displayInitHw();
 
 void displayInit();
 

@@ -46,10 +46,10 @@ void displayBlitScreen() {
 void displayBlitRect(int x, int y, int w, int h) {
 	SPI_select();
 	uint8_t page_start = (y / 8) & 0x0F;
-	uint8_t page_end = ((y + h) / 8);
+	uint8_t page_end = (y + h) / 8;
 	if (page_end >= 7)
 		page_end = 7;
-
+    //column address
 	uint8_t msb = (x >> 4) & 0x0F;
 	uint8_t lsb = x & 0x0F;
 
@@ -57,7 +57,7 @@ void displayBlitRect(int x, int y, int w, int h) {
 		displaySendCmd(0xB0 | page);
 		displaySendCmd(0b00010000 | msb);
 		displaySendCmd(0b00000000 | lsb);
-		displaySendMultiple(&PixBuff[page * DISPLAY_W], w);
+		displaySendMultiple(&PixBuff[page * DISPLAY_W + x], w);
 		displaySendCmd(0xEE);
 	}
 	SPI_deselect();
@@ -106,6 +106,17 @@ void displayPutPixel(int x, int y, bool color) { //x in [0..64], y in [0..130]
 	displaySendData(new_data);
 	PixBuff[place] = new_data;
 	SPI_deselect();
+}
+
+void displayInitHw() {
+    SPI_init();
+    //Init additional lines (RS/A0 and RST)
+	GPIOA->CRL = GPIOA->CRL & ~(GPIO_CRL_CNF4|GPIO_CRL_MODE4 |
+		GPIO_CRL_CNF3|GPIO_CRL_MODE3) |
+		GPIO_CRL_MODE3_1|GPIO_CRL_MODE3_0|
+		GPIO_CRL_MODE4_1|GPIO_CRL_MODE4_0;
+    // enable SPI
+	SPI1->CR1 |= SPI_CR1_SPE;
 }
 
 void displayInit() {
