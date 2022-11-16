@@ -25,6 +25,8 @@ int __attribute((noreturn)) main(void) {
 	// enable SPI
 	SPI1->CR1 |= SPI_CR1_SPE;
 	/* Init display */
+	displayInitHw();
+
 	displayInit();
 
 	displayClear();
