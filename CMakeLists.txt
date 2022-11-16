@@ -48,11 +48,15 @@ add_definitions(-DSTM32F1)
 
 include_directories(cmsis)
 include_directories(stm32)
+include_directories(inc)
 
 set(SOURCE_FILES
     stm32/startup/startup_stm32f10x_md.c # Choose startup file for your MCU
     stm32/system_stm32f10x.c
     syscalls/syscalls.c
+    src/spi.c
+    src/utils.c
+    src/gmg12864.c
     main.c)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/.gdbinit DESTINATION ${EXECUTABLE_OUTPUT_PATH})
