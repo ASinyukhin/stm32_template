@@ -140,3 +140,46 @@ void displayInit() {
   	displaySendCmd(0xAF); // Display on
 	SPI_deselect();
 }
+
+
+void pixbufDrawLine(int x0, int y0, int x1, int y1) {
+	int delta_x = ABS(x1 - x0);
+	int delta_y = ABS(y1 - y0);
+	int error = 0;
+	
+	if (delta_x >= delta_y) {
+		//x-direction
+		if (x0 > x1) {
+			SWAP(x0, x1, int);
+			SWAP(y0, y1, int);
+		}
+		int dir_y = SIGN(y1 - y0);
+		int delta_err = delta_y + 1;
+		//printf("delta_err = %d; delta_x = %d \r\n", delta_err, delta_x);
+		int y = y0;
+		for (int x=x0; x<=x1; x++) {
+			pixbufSetPixel(x, y, true);
+			error += delta_err;
+			if (error >= delta_x + 1) {
+				y += dir_y;
+				error -= (delta_x + 1);
+			}
+		}
+	} else { //y-direction
+		if (y0 > y1) {
+			SWAP(x0, x1, int);
+			SWAP(y0, y1, int);
+		}
+		int dir_x = SIGN(x1 - x0);
+		int delta_err = delta_x + 1;
+		int x = x0;
+		for (int y=y0; y<=y1; y++) {
+			pixbufSetPixel(x, y, true);
+			error += delta_err;
+			if (error >= delta_y + 1) {
+				x += dir_x;
+				error -= (delta_y + 1);
+			}
+		}
+	}
+}
