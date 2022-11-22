@@ -43,4 +43,6 @@ void displayInit();
 
 void pixbufDrawLine(int x0, int y0, int x1, int y1);
 
+void pixbufDrawCircle(int x0, int y0, int r);
+
 #endif
