@@ -31,11 +31,35 @@ int __attribute((noreturn)) main(void) {
 
 	displayClear();
 
+	/*pixbufDrawLine(64, 32, 0, 0);
+	pixbufDrawLine(64, 32, 0, 32);
+	pixbufDrawLine(64, 32, 0, 40);
+	pixbufDrawLine(64, 32, 1, 63);
+	pixbufDrawLine(64, 32, 50, 63);
+	pixbufDrawLine(64, 32, 64, 63);
+	pixbufDrawLine(64, 32, 100, 63);
+	pixbufDrawLine(64, 32, 124, 63);
+	pixbufDrawLine(64, 32, 127, 49);
+	pixbufDrawLine(64, 32, 127, 30);
+	pixbufDrawLine(64, 32, 127, 10);
+	pixbufDrawLine(64, 32, 120, 0);*/
+	pixbufDrawCircle(27, 27, 25);
+	pixbufDrawCircle(64, 32, 25);
+	pixbufDrawCircle(74, 29, 10);
+	pixbufDrawCircle(80, 40, 15);
+	pixbufDrawCircle(100, 45, 12);
+	pixbufDrawCircle(105, 18, 12);
+
+	pixbufDrawCircle(120, 30, 3);
+	pixbufDrawCircle(120, 50, 1);
+
+	displayBlitScreen();
+
 	uint32_t shift = 0;
 	while (1) {
 		/* test SPI code */
 		GPIOC->ODR |= GPIO_ODR_ODR13;
-		clearPixBuf();
+		/*clearPixBuf();
 		for (int i=0; i<DISPLAY_W; i+=4) {
 			for (int j=0; j<DISPLAY_H; j+=4) {
 				int i_new = (i + shift) % DISPLAY_W;
@@ -46,9 +70,10 @@ int __attribute((noreturn)) main(void) {
 		if (shift == 0)
 			displayBlitScreen();
 		else
-			displayBlitRect(0, 0, 16, 16);
+			displayBlitRect(0, 0, 15, 15);*/
 		GPIOC->ODR &= ~GPIO_ODR_ODR13;
 		delay_us(250000);
+		displayBlitScreen();
 		shift = (shift + 1) % 4;
 	}
 }

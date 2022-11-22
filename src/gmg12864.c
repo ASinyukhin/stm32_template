@@ -184,8 +184,6 @@ void pixbufDrawLine(int x0, int y0, int x1, int y1) {
 	}
 }
 
-#define SQR(x) ((x)*(x))
-
 void pixbufDrawCircle(int x0, int y0, int r) {
 	pixbufSetPixel(x0, y0, true);
 	int x = x0;
