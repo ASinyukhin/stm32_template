@@ -19,16 +19,16 @@ void HardFault_Handler(void) {
 	}
 }
 
-//If we use CMSIC interrupts table, we do not want have them redefined in libopencmsis
-//Otherwise we should use only libopencm3 irq table and it's startup
-#undef TIM2_IRQHandler
-//This is a workaround and should be fixed in future
+
 void TIM2_IRQHandler(void) {
+//void tim2_isr(void) {
 	gpio_toggle(GPIOC, GPIO13);
 	timer_clear_flag(TIM2, TIM_SR_UIF);
 }
 
 int __attribute((noreturn)) main(void) {
+
+	rcc_clock_setup_pll(&rcc_hse_configs[RCC_CLOCK_HSE8_72MHZ]);
 	//RCC_APB2ENR |= RCC_APB2ENR_IOPCEN; //TODO: check for rcc_ function to enable gpio clock
 	rcc_periph_clock_enable(RCC_GPIOC);
 	rcc_periph_clock_enable(RCC_USART2);
@@ -43,7 +43,7 @@ int __attribute((noreturn)) main(void) {
 	timer_set_mode(TIM2, TIM_CR1_CKD_CK_INT, TIM_CR1_CMS_EDGE, TIM_CR1_DIR_UP);
 	timer_set_prescaler(TIM2, tim_pre);
 	timer_disable_preload(TIM2);
-	timer_set_period(TIM2, 30000);
+	timer_set_period(TIM2, 20000);
 	timer_enable_irq(TIM2, TIM_DIER_UIE); //update IRQ
 	
 	nvic_enable_irq(NVIC_TIM2_IRQ);

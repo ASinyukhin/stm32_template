@@ -31,7 +31,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-move-loop-invariants -fsigned-char -ffr
 set(LINKER_FLAGS "-nostdlib -nostartfiles")
 set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -Map -Xlinker ${TARGET_NAME}.map ")
 # Choose ld file for your MCU carefully
-set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -T ${CMAKE_CURRENT_SOURCE_DIR}/stm32f103c8.ld")
+#set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -T ${CMAKE_CURRENT_SOURCE_DIR}/stm32f103c8.ld")
+set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -T ${CMAKE_CURRENT_SOURCE_DIR}/stm32_basic.ld")
 # set(LINKER_FLAGS "${LINKER_FLAGS} -mcpu=cortex-m3 -mthumb -nostartfiles -g ") #Not necessary
 set(LINKER_FLAGS "${LINKER_FLAGS} -Wl,--gc-sections ")
 # Passing flags to cmake linker variable
@@ -50,16 +51,14 @@ include_directories(cmsis)
 include_directories(stm32)
 
 set(SOURCE_FILES
-    stm32/startup/startup_stm32f10x_md.c # Choose startup file for your MCU
-    stm32/system_stm32f10x.c
-    syscalls/syscalls.c
+    # stm32/startup/startup_stm32f10x_md.c # Choose startup file for your MCU
+    # stm32/system_stm32f10x.c
+    # syscalls/syscalls.c
     main.c)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/.gdbinit DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 
 add_executable(${TARGET_NAME} ${SOURCE_FILES})
-
-add_dependencies(${TARGET_NAME} opencm3)
 
 # May be useful when developing custom library
 # Option TARGETS not working for me now
@@ -91,6 +90,8 @@ ExternalProject_Add(opencm3_build
     BUILD_IN_SOURCE TRUE
     INSTALL_COMMAND ""
 )
+
+add_dependencies(${TARGET_NAME} opencm3)
 
 # Public include dirs for lib
 set(OPENCM3_INC_DIRS "${OPENCM3_PATH}/include")
