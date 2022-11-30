@@ -28,7 +28,8 @@ set(CMAKE_C_FLAGS "-mcpu=cortex-m3 -mthumb -std=c99")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fdata-sections -ffunction-sections -mlittle-endian -g3")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-move-loop-invariants -fsigned-char -ffreestanding")
 
-set(LINKER_FLAGS "-nostdlib -nostartfiles")
+#set(LINKER_FLAGS "-nostdlib -nostartfiles")
+set(LINKER_FLAGS "-nostartfiles")
 set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -Map -Xlinker ${TARGET_NAME}.map ")
 # Choose ld file for your MCU carefully
 #set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -T ${CMAKE_CURRENT_SOURCE_DIR}/stm32f103c8.ld")
@@ -57,6 +58,8 @@ set(SOURCE_FILES
     main.c)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/.gdbinit DESTINATION ${EXECUTABLE_OUTPUT_PATH})
+
+add_subdirectory(libs/freertos)
 
 add_executable(${TARGET_NAME} ${SOURCE_FILES})
 
@@ -109,6 +112,8 @@ set_target_properties(opencm3 PROPERTIES
 )
 
 target_link_libraries(${PROJECT_NAME} opencm3)
+
+target_link_libraries(${PROJECT_NAME} freertos_kernel)
 
 # Targets for make firmware in different formats
 set(BIN_TARGET "${EXECUTABLE_OUTPUT_PATH}/${TARGET_NAME}.bin")

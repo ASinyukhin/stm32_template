@@ -7,6 +7,8 @@ build/
 *.elf
 *.hex
 *.map
+*.a
+*.o
 CMakeCache.txt
 [M,m]akefile
 
