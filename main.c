@@ -5,8 +5,6 @@
 #include <libopencm3/stm32/timer.h>
 #include <libopencmsis/core_cm3.h>
 
-#include <system_stm32f10x.h>
-
 void delay(uint32_t ticks) {
 	for (int i=0; i<ticks; i++) {
 		__asm volatile("nop");
