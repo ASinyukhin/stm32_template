@@ -86,6 +86,7 @@ NVIC value of 255. */
 #define configUSE_TICKLESS_IDLE 0
 #define configEXPECTED_IDLE_TIME_BEFORE_SLEEP 2
 
+/* Be carefull here: handler names in libopencm3 differs from standard CMSIS names */
 #define vPortSVCHandler sv_call_handler
 #define xPortPendSVHandler pend_sv_handler
 #define xPortSysTickHandler sys_tick_handler
