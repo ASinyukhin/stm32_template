@@ -6,6 +6,13 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
+typedef enum {
+	CommandNone = 0,
+	CommandToggle = 1<<0,
+	CommandIncrease = 1<<1,
+	CommandDecrease = 1<<2
+}Command_T;
+
 void delay(uint32_t ticks) {
 	for (int i=0; i<ticks; i++) {
 		__asm volatile("nop");
@@ -24,10 +31,46 @@ void TIM2_IRQHandler(void) {
 	timer_clear_flag(TIM2, TIM_SR_UIF);
 }
 
+TaskHandle_t BlinkTaskHandle;
+
 void blinkTask(void *params) {
+	uint32_t blinkPeriod = 1000;
 	while (1) {
-		gpio_toggle(GPIOC, GPIO13);
-		vTaskDelay(100);
+		uint32_t value = ulTaskNotifyTake(0, 1000);
+		if (value != 0) {
+			switch (value) {
+				case CommandToggle:
+					gpio_toggle(GPIOC, GPIO13);
+					break;
+				default:
+					break;
+			}
+		}
+	}
+}
+
+void interfaceTask(void *params) {
+	/* init gpios */
+	rcc_periph_clock_enable(RCC_GPIOB);
+	uint16_t mask = GPIO4|GPIO5|GPIO6;
+	gpio_set_mode(GPIOB, GPIO_MODE_INPUT, GPIO_CNF_INPUT_PULL_UPDOWN, mask);
+	/* activate pullup */
+	gpio_port_write(GPIOB, mask);
+	uint16_t prevValue = gpio_get(GPIOB, mask);
+	while (1) {
+		uint16_t newValue = gpio_get(GPIOB, mask);
+		uint16_t pressed = ~newValue & prevValue;
+		Command_T command = CommandNone;
+		if (pressed & GPIO4)
+			command |= CommandToggle;
+		if (pressed & GPIO5)
+			command |= CommandIncrease;
+		if (pressed & GPIO6)
+			command |= CommandDecrease;
+		if (command != 0)
+			xTaskNotify(BlinkTaskHandle, command, eSetValueWithOverwrite);
+		prevValue = newValue;
+		vTaskDelay(50);
 	}
 }
 
@@ -56,7 +99,10 @@ int __attribute((noreturn)) main(void) {
 	nvic_clear_pending_irq(NVIC_TIM2_IRQ);
 	timer_enable_counter(TIM2);
 #endif
-	xTaskCreate(blinkTask, "blink", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+	xTaskCreate(blinkTask, "blink", configMINIMAL_STACK_SIZE, NULL, 0, &BlinkTaskHandle);
+
+	xTaskCreate(interfaceTask, "iface", configMINIMAL_STACK_SIZE, NULL, 0, NULL);
+
 	vTaskStartScheduler();
 
 	while (1) {
