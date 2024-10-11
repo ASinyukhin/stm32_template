@@ -43,6 +43,34 @@ void delay_ms(uint32_t ms) {
 #define LED_PIN_NO 13
 
 
+//Port Number: A,B,C,...
+//Pin number (line)
+void gpioToggle(GPIO_TypeDef* port, uint32_t lineNo) {
+	const uint32_t mask = (1<<lineNo);
+	uint16_t gpio = port->ODR & mask;
+	port->BSRR = (gpio << 16) | (~gpio & mask);
+	//BSRR: [31:16] -- reset, [15:0] -- set
+}
+
+static volatile uint32_t Counter = 0;
+
+void SysTick_Handler() {
+	//Do some periodic action
+	Counter++;
+}
+
+//getter
+uint32_t getSystemCounter() {
+	return Counter;
+}
+
+void some_action() {
+	uint16_t gpio = GPIOC->ODR & GPIO_ODR_ODR13;
+	GPIOC->BSRR = (gpio << 16) | (~gpio & GPIO_ODR_ODR13);
+	//BSRR: [31:16] -- reset, [15:0] -- set
+	//delay_ms(100);
+}
+
 int __attribute((noreturn)) main(void) {
 #if 0 //Простейшая программа "Blink"
 	// Enable clock for AFIO
@@ -72,11 +100,46 @@ int __attribute((noreturn)) main(void) {
 	//включаем подтяжку к питанию
 	GPIOA->ODR |= GPIO_ODR_ODR3|GPIO_ODR_ODR4|GPIO_ODR_ODR5;
 
+/*
+	//Конфигурация SySTick
+	SysTick_Config(SystemCoreClock/1000);
+
 	while (1) {
+		uint32_t start = getSystemCounter();
 		//Переключение состояния светодиода
-		uint16_t gpio = GPIOC->ODR & GPIO_ODR_ODR13;
-		GPIOC->BSRR = (gpio << 16) | (~gpio & GPIO_ODR_ODR13);
-		//BSRR: [31:16] -- reset, [15:0] -- set
-		delay_ms(100);
+		some_action();
+		uint32_t elapsed = getSystemCounter() - start;
+		//delay_ms(200 - elapsed);
+		delay_ms(200);
+	}
+	*/
+	const uint32_t t1 = 500; //led switch period
+	const uint32_t t2 = 50;  //button check period
+
+	uint32_t p[2] = {t1, t2};
+	//У кого-то это кнопка PB9
+	bool prevButtonState = GPIOA->IDR & GPIO_IDR_IDR5;
+
+	bool ledBlink = true;
+
+	while (1) {
+		uint32_t tau = MIN(p[0], p[1]);
+		delay_ms(tau);
+		for (int i=0; i<2; i++) {
+			p[i] -= tau;
+		}
+		if (p[0] == 0) {
+			if (ledBlink)
+				gpioToggle(GPIOC, 13);
+			p[0] = t1;
+		}
+		if (p[1] == 0) {
+			//PB9 кнопка
+			bool newState = GPIOA->IDR & GPIO_IDR_IDR5;
+			if (!newState && prevButtonState)
+				ledBlink = !ledBlink; //switch led blink
+			prevButtonState = newState;
+			p[1] = t2;
+		}
 	}
 }
