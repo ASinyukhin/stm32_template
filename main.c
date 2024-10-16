@@ -79,6 +79,7 @@ void TIM2_IRQHandler() {
 */
 //#define BUTTON_MASK (GPIO_IDR_IDR3|GPIO_IDR_IDR4|GPIO_IDR_IDR5)
 
+/*
 void TIM2_IRQHandler(void) {
 	//SR -- Status Register -- какое событие произошло
 	//CC1IF -- флаг события Compare (сравнение)
@@ -90,7 +91,7 @@ void TIM2_IRQHandler(void) {
 		gpioToggle(GPIOC, 13);
 		TIM2->SR &= ~TIM_SR_UIF;
 	}
-}
+}*/
 
 int __attribute((noreturn)) main(void) {
 	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
@@ -136,11 +137,12 @@ int __attribute((noreturn)) main(void) {
 		}
 	}
 #endif
+#if 0 	
 	//100us -- 1timer tick 
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-	TIM2->PSC = SystemCoreClock/10000;
-	TIM2->ARR = 10000;
-	TIM2->CCR1 = 1000;
+	TIM2->PSC = 72 - 1;
+	TIM2->ARR = 1000;
+	TIM2->CCR1 = 1;
 	TIM2->DIER |= TIM_DIER_UIE | TIM_DIER_CC1IE;
 	//вкл. прервывание в ядре
 	NVIC_ClearPendingIRQ(TIM2_IRQn);
@@ -151,4 +153,30 @@ int __attribute((noreturn)) main(void) {
 	while (1) {
 		;
 	}
+#endif
+	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST;
+	RCC->APB1RSTR &= ~RCC_APB1RSTR_TIM2RST;
+
+	//Alternate output mode для линии аппаратного ШИМ
+	GPIOA->CRL = GPIOA->CRL & ~(GPIO_CRL_CNF1|GPIO_CRL_MODE1) |
+	  GPIO_CRL_CNF1_1|GPIO_CRL_MODE1_0; //CNF: 10, MODE: 01
+
+	GPIOA->CRL = GPIOA->CRL & ~(GPIO_CRL_CNF2|GPIO_CRL_MODE2) |
+	  GPIO_CRL_CNF2_1|GPIO_CRL_MODE2_0; //CNF: 10, MODE: 01
+
+	TIM2->PSC = 36 - 1;
+	TIM2->ARR = 1024;
+	TIM2->CCR2 = 400; // CCR2 -- Канал 2 на PA1 по даташиту(!)
+	TIM2->CCR3 = 800; // CCR3 -- Канал 3
+	TIM2->CR1 |= TIM_CR1_ARPE;
+	TIM2->CCMR1 |= TIM_CCMR1_OC2M_1|TIM_CCMR1_OC2M_2; //set PWM Mode 1
+	TIM2->CCMR2 |= TIM_CCMR2_OC3M_1|TIM_CCMR2_OC3M_2;
+
+	TIM2->CCER |= TIM_CCER_CC2E | TIM_CCER_CC3E; //Enable timer channel out
+	TIM2->CR1 |= TIM_CR1_CEN; // Start timer
+	while (1) { 
+		__asm volatile ("nop"); 
+	}
+
 }
