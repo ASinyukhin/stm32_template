@@ -64,30 +64,35 @@ uint32_t getSystemCounter() {
 	return Counter;
 }
 
-void some_action() {
-	uint16_t gpio = GPIOC->ODR & GPIO_ODR_ODR13;
-	GPIOC->BSRR = (gpio << 16) | (~gpio & GPIO_ODR_ODR13);
-	//BSRR: [31:16] -- reset, [15:0] -- set
-	//delay_ms(100);
+
+/*
+void TIM2_IRQHandler() {
+	if (TIM2->SR & TIM_SR_CC1IF) {
+		gpioToggle(GPIOC, 13);
+		TIM2->SR &= ~TIM_SR_CC1IF;
+	}
+	if (TIM2->SR & TIM_SR_UIF) {
+		gpioToggle(GPIOC, 13);
+		TIM2->SR &= ~TIM_SR_UIF;
+	}
+}
+*/
+//#define BUTTON_MASK (GPIO_IDR_IDR3|GPIO_IDR_IDR4|GPIO_IDR_IDR5)
+
+void TIM2_IRQHandler(void) {
+	//SR -- Status Register -- какое событие произошло
+	//CC1IF -- флаг события Compare (сравнение)
+	if (TIM2->SR & TIM_SR_CC1IF) {
+		gpioToggle(GPIOC, 13);
+		TIM2->SR &= ~TIM_SR_CC1IF;
+	}
+	if (TIM2->SR & TIM_SR_UIF != 0) {
+		gpioToggle(GPIOC, 13);
+		TIM2->SR &= ~TIM_SR_UIF;
+	}
 }
 
 int __attribute((noreturn)) main(void) {
-#if 0 //Простейшая программа "Blink"
-	// Enable clock for AFIO
-	RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
-	// Enable clock for GPIOC
-	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
-	// Enable PC13 push-pull mode
-	GPIOC->CRH &= ~GPIO_CRH_CNF13; //clear cnf bits
-	GPIOC->CRH |= GPIO_CRH_MODE13_0; //Max speed = 10Mhz
-
-    while (1) {
-	    GPIOC->ODR |= (1U<<13U); //U -- unsigned suffix (to avoid syntax warnings in IDE)
-		delay(5000000);
-	    GPIOC->ODR &= ~(1U<<13U);
-	    delay(1000000);
-    }
-#endif
 	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
 	//CRL: пины 0-7, CRH: пины 8-15
 	GPIOC->CRH = GPIOC->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13) | GPIO_CRH_MODE13_0; //PC13 = output
@@ -100,19 +105,7 @@ int __attribute((noreturn)) main(void) {
 	//включаем подтяжку к питанию
 	GPIOA->ODR |= GPIO_ODR_ODR3|GPIO_ODR_ODR4|GPIO_ODR_ODR5;
 
-/*
-	//Конфигурация SySTick
-	SysTick_Config(SystemCoreClock/1000);
-
-	while (1) {
-		uint32_t start = getSystemCounter();
-		//Переключение состояния светодиода
-		some_action();
-		uint32_t elapsed = getSystemCounter() - start;
-		//delay_ms(200 - elapsed);
-		delay_ms(200);
-	}
-	*/
+#if 0
 	const uint32_t t1 = 500; //led switch period
 	const uint32_t t2 = 50;  //button check period
 
@@ -141,5 +134,21 @@ int __attribute((noreturn)) main(void) {
 			prevButtonState = newState;
 			p[1] = t2;
 		}
+	}
+#endif
+	//100us -- 1timer tick 
+	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+	TIM2->PSC = SystemCoreClock/10000;
+	TIM2->ARR = 10000;
+	TIM2->CCR1 = 1000;
+	TIM2->DIER |= TIM_DIER_UIE | TIM_DIER_CC1IE;
+	//вкл. прервывание в ядре
+	NVIC_ClearPendingIRQ(TIM2_IRQn);
+	NVIC_SetPriority(TIM2_IRQn, 0);
+	NVIC_EnableIRQ(TIM2_IRQn);
+	TIM2->CR1 |= TIM_CR1_CEN; //вкл.
+
+	while (1) {
+		;
 	}
 }
