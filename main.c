@@ -1,10 +1,12 @@
 #include <stdint.h>
-#include <stm32f10x.h>
 #include <stdbool.h>
+#include <libopencm3/stm32/gpio.h>
+#include <libopencm3/stm32/rcc.h>
+#include <libopencmsis/core_cm3.h>
 
 void delay(uint32_t ticks) {
 	for (int i=0; i<ticks; i++) {
-		__NOP();
+		;
 	}
 }
 
@@ -43,14 +45,9 @@ void delay_ms(uint32_t ms) {
 #define LED_PIN_NO 13
 
 
+#if 0
 //Port Number: A,B,C,...
 //Pin number (line)
-void gpioToggle(GPIO_TypeDef* port, uint32_t lineNo) {
-	const uint32_t mask = (1<<lineNo);
-	uint16_t gpio = port->ODR & mask;
-	port->BSRR = (gpio << 16) | (~gpio & mask);
-	//BSRR: [31:16] -- reset, [15:0] -- set
-}
 
 static volatile uint32_t Counter = 0;
 
@@ -72,22 +69,6 @@ void some_action() {
 }
 
 int __attribute((noreturn)) main(void) {
-#if 0 //Простейшая программа "Blink"
-	// Enable clock for AFIO
-	RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
-	// Enable clock for GPIOC
-	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
-	// Enable PC13 push-pull mode
-	GPIOC->CRH &= ~GPIO_CRH_CNF13; //clear cnf bits
-	GPIOC->CRH |= GPIO_CRH_MODE13_0; //Max speed = 10Mhz
-
-    while (1) {
-	    GPIOC->ODR |= (1U<<13U); //U -- unsigned suffix (to avoid syntax warnings in IDE)
-		delay(5000000);
-	    GPIOC->ODR &= ~(1U<<13U);
-	    delay(1000000);
-    }
-#endif
 	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
 	//CRL: пины 0-7, CRH: пины 8-15
 	GPIOC->CRH = GPIOC->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13) | GPIO_CRH_MODE13_0; //PC13 = output
@@ -141,5 +122,19 @@ int __attribute((noreturn)) main(void) {
 			prevButtonState = newState;
 			p[1] = t2;
 		}
+	}
+}
+
+#endif
+
+int main(void) {
+	rcc_clock_setup_pll (&rcc_hse_configs [RCC_CLOCK_HSE8_72MHZ ]);
+	rcc_periph_clock_enable(RCC_GPIOC);
+	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
+	GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
+
+	while (1) {
+		gpio_toggle(GPIOC, GPIO13);
+		delay_ms(100);
 	}
 }
