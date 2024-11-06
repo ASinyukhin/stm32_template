@@ -23,7 +23,7 @@ SET(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/build)
 
 set(CMAKE_EXECUTABLE_SUFFIX ".elf")
-
+set(ROOT_LD_FILENAME "stm32_basic.ld")
 set(CMAKE_C_FLAGS "-mcpu=cortex-m3 -mthumb -std=c99")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fdata-sections -ffunction-sections -mlittle-endian -g3")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-move-loop-invariants -fsigned-char -ffreestanding")
@@ -33,13 +33,15 @@ set(LINKER_FLAGS "-nostartfiles")
 set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -Map -Xlinker ${TARGET_NAME}.map ")
 # Choose ld file for your MCU carefully
 #set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -T ${CMAKE_CURRENT_SOURCE_DIR}/stm32f103c8.ld")
-set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -T ${CMAKE_CURRENT_SOURCE_DIR}/stm32_basic.ld")
+set(LINKER_FLAGS "${LINKER_FLAGS} -Xlinker -T ${CMAKE_CURRENT_SOURCE_DIR}/${ROOT_LD_FILENAME}")
 # set(LINKER_FLAGS "${LINKER_FLAGS} -mcpu=cortex-m3 -mthumb -nostartfiles -g ") #Not necessary
 set(LINKER_FLAGS "${LINKER_FLAGS} -Wl,--gc-sections ")
 # Passing flags to cmake linker variable
 set(CMAKE_C_LINK_FLAGS ${LINKER_FLAGS})
 
 message("DIRECTORY ${EXECUTABLE_OUTPUT_PATH}")
+
+configure_file(stm32_basic.ld.in "${CMAKE_CURRENT_SOURCE_DIR}/${ROOT_LD_FILENAME}")
 
 # Preprocessor definitions set MCU family and so-called "density"
 add_definitions(-DSTM32F103C8)
