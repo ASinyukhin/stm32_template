@@ -119,13 +119,19 @@ int main(void) {
 		GPIO_CNF_INPUT_FLOAT, GPIO10); //PA10 -- RX
 	
 	usart_set_baudrate(USART1, 9600);
-	usart_set_mode(USART1, USART_MODE_TX);
+	usart_set_mode(USART1, USART_MODE_TX_RX);
 	//usart_set_databits(USART1, 8);
 	usart_set_stopbits(USART1, USART_CR2_STOPBITS_1);
 	usart_enable(USART1);
 
 	while (1) {
-		usart_send(USART1, 'A');
-		delay_ms(100);
+		//usart_send(USART1, 'A');
+		//usart_recv()
+		uint16_t byte = usart_recv_blocking(USART1);
+		if (byte >= 'a' && byte <= 'z') {
+			byte += ('A' - 'a');
+		}
+		usart_send_blocking(USART1, byte);
+		//delay_ms(100);
 	}
 }
