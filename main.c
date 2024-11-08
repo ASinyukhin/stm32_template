@@ -50,6 +50,40 @@ void cmd(uint8_t command) {
 	//
 }
 
+//static uint8_t Buffer[256] = {0};
+bool Command = false;
+bool LedState = false;
+
+void usart1_isr (void) {
+	//USART1->SR в opencm3 вот так: 
+	//USART_SR(USART1)
+	if (USART_SR(USART1) & USART_SR_RXNE) //RXNE -- not empty 
+	//т.е. пришёл байт
+	{
+		uint8_t byte = usart_recv(USART1);
+		switch (byte) {
+			case 'E':
+			case 'e':
+				LedState = true;
+				Command = true;
+				break;
+			case 'D':
+			case 'd':
+				LedState = false;
+				Command = true;
+				break;
+			default:
+				;
+		}
+	}
+}
+
+void usart_print(const char *str) {
+	while (*str != '\0') {
+		usart_send_blocking(USART1, *str);
+		str++;
+	}
+}
 
 int main(void) {
 	rcc_clock_setup_pll (&rcc_hse_configs [RCC_CLOCK_HSE8_72MHZ ]);
@@ -110,6 +144,9 @@ int main(void) {
 		SPI_CR1_MSBFIRST );
 	spi_enable(SPI1);
 */
+	rcc_periph_clock_enable(RCC_GPIOC);
+	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
+		GPIO_CNF_OUTPUT_PUSHPULL, GPIO13); //PC13 LED
 	//USART1
 	rcc_periph_clock_enable(RCC_GPIOA);
 	rcc_periph_clock_enable(RCC_USART1);
@@ -122,16 +159,21 @@ int main(void) {
 	usart_set_mode(USART1, USART_MODE_TX_RX);
 	//usart_set_databits(USART1, 8);
 	usart_set_stopbits(USART1, USART_CR2_STOPBITS_1);
+	//прерывание в периферии вкл.
+	usart_enable_rx_interrupt(USART1);
+	//NVIC -- в ядре MCU
+	nvic_set_priority(NVIC_USART1_IRQ, 0);
+	nvic_enable_irq(NVIC_USART1_IRQ);
 	usart_enable(USART1);
 
 	while (1) {
-		//usart_send(USART1, 'A');
-		//usart_recv()
-		uint16_t byte = usart_recv_blocking(USART1);
-		if (byte >= 'a' && byte <= 'z') {
-			byte += ('A' - 'a');
+		if (Command) {
+			if (LedState)
+				gpio_set(GPIOC, GPIO13);
+			else
+				gpio_clear(GPIOC, GPIO13);
+			Command = false;
+			usart_print("OK\r\n");
 		}
-		usart_send_blocking(USART1, byte);
-		//delay_ms(100);
 	}
 }
