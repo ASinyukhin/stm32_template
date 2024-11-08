@@ -3,6 +3,8 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencmsis/core_cm3.h>
+//#include <libopencm3/stm32/spi.h>
+#include <libopencm3/stm32/usart.h>
 
 void delay(uint32_t ticks) {
 	for (int i=0; i<ticks; i++) {
@@ -42,67 +44,34 @@ void delay_ms(uint32_t ms) {
 	//Упрощённо: delay_us(ms * 1000);
 }
 
-#define LED_PIN_NO 13
+void cmd(uint8_t command) {
+	//gpio_set(); //RS
+	//spi_send();
+	//
+}
 
+
+int main(void) {
+	rcc_clock_setup_pll (&rcc_hse_configs [RCC_CLOCK_HSE8_72MHZ ]);
 
 #if 0
-//Port Number: A,B,C,...
-//Pin number (line)
+	rcc_periph_clock_enable(RCC_GPIOC);
+	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
+		GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
 
-static volatile uint32_t Counter = 0;
+	//PA 3,4,5 -- на вход!
+	rcc_periph_clock_enable(RCC_GPIOA);
+	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
+		GPIO_CNF_INPUT_PULL_UPDOWN, GPIO3|GPIO4|GPIO5);
+	//подтягивающие резисторы
+	gpio_set(GPIOA, GPIO3|GPIO4|GPIO5);
 
-void SysTick_Handler() {
-	//Do some periodic action
-	Counter++;
-}
-
-//getter
-uint32_t getSystemCounter() {
-	return Counter;
-}
-
-void some_action() {
-	uint16_t gpio = GPIOC->ODR & GPIO_ODR_ODR13;
-	GPIOC->BSRR = (gpio << 16) | (~gpio & GPIO_ODR_ODR13);
-	//BSRR: [31:16] -- reset, [15:0] -- set
-	//delay_ms(100);
-}
-
-int __attribute((noreturn)) main(void) {
-	RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
-	//CRL: пины 0-7, CRH: пины 8-15
-	GPIOC->CRH = GPIOC->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13) | GPIO_CRH_MODE13_0; //PC13 = output
-	//включаем тактирование порта A
-	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
-	//конфигурируем GPIOA 3-5 пины на вход
-	GPIOA->CRL = GPIOA->CRL & ~(GPIO_CRL_CNF3|GPIO_CRL_CNF4|GPIO_CRL_CNF5 |
-	  GPIO_CRL_MODE3|GPIO_CRL_MODE4|GPIO_CRL_MODE5) |
-	  GPIO_CRL_CNF3_1|GPIO_CRL_CNF4_1|GPIO_CRL_CNF5_1;
-	//включаем подтяжку к питанию
-	GPIOA->ODR |= GPIO_ODR_ODR3|GPIO_ODR_ODR4|GPIO_ODR_ODR5;
-
-/*
-	//Конфигурация SySTick
-	SysTick_Config(SystemCoreClock/1000);
-
-	while (1) {
-		uint32_t start = getSystemCounter();
-		//Переключение состояния светодиода
-		some_action();
-		uint32_t elapsed = getSystemCounter() - start;
-		//delay_ms(200 - elapsed);
-		delay_ms(200);
-	}
-	*/
 	const uint32_t t1 = 500; //led switch period
 	const uint32_t t2 = 50;  //button check period
-
 	uint32_t p[2] = {t1, t2};
-	//У кого-то это кнопка PB9
-	bool prevButtonState = GPIOA->IDR & GPIO_IDR_IDR5;
-
+	
+	bool prevButtonState = gpio_get(GPIOA, GPIO5);
 	bool ledBlink = true;
-
 	while (1) {
 		uint32_t tau = MIN(p[0], p[1]);
 		delay_ms(tau);
@@ -111,30 +80,52 @@ int __attribute((noreturn)) main(void) {
 		}
 		if (p[0] == 0) {
 			if (ledBlink)
-				gpioToggle(GPIOC, 13);
+				gpio_toggle(GPIOC, GPIO13);
 			p[0] = t1;
 		}
 		if (p[1] == 0) {
-			//PB9 кнопка
-			bool newState = GPIOA->IDR & GPIO_IDR_IDR5;
+			bool newState = gpio_get(GPIOA, GPIO5);
 			if (!newState && prevButtonState)
 				ledBlink = !ledBlink; //switch led blink
 			prevButtonState = newState;
 			p[1] = t2;
 		}
 	}
-}
-
 #endif
+/*
+	rcc_periph_clock_enable(RCC_GPIOA);
+	rcc_periph_clock_enable(RCC_SPI1);
+	//MISO, MOSI, CLK, NSS, RS, RSE
+	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ,
+	 GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO7);
+	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ,
+	 GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO5);
+	//CS -- Chip select
+	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
+	 GPIO_CNF_OUTPUT_PUSHPULL, GPIO1|GPIO2|GPIO3);
 
-int main(void) {
-	rcc_clock_setup_pll (&rcc_hse_configs [RCC_CLOCK_HSE8_72MHZ ]);
-	rcc_periph_clock_enable(RCC_GPIOC);
-	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
-	GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
+	//SPI
+	spi_init_master(SPI1, SPI_CR1_BR_FPCLK_DIV_64, 
+		SPI_CR1_CPOL, SPI_CR1_CPHA, SPI_CR1_DFF_8BIT,
+		SPI_CR1_MSBFIRST );
+	spi_enable(SPI1);
+*/
+	//USART1
+	rcc_periph_clock_enable(RCC_GPIOA);
+	rcc_periph_clock_enable(RCC_USART1);
+	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ, 
+		GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO9); //PA9 -- TX
+	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
+		GPIO_CNF_INPUT_FLOAT, GPIO10); //PA10 -- RX
+	
+	usart_set_baudrate(USART1, 9600);
+	usart_set_mode(USART1, USART_MODE_TX);
+	//usart_set_databits(USART1, 8);
+	usart_set_stopbits(USART1, USART_CR2_STOPBITS_1);
+	usart_enable(USART1);
 
 	while (1) {
-		gpio_toggle(GPIOC, GPIO13);
+		usart_send(USART1, 'A');
 		delay_ms(100);
 	}
 }
