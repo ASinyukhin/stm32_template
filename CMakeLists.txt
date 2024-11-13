@@ -52,6 +52,9 @@ add_definitions(-DSTM32F10X_MD)
 include_directories(cmsis)
 include_directories(stm32)
 
+# Add path ro FreeRTOS library
+add_subdirectory(libs/freertos)
+
 set(SOURCE_FILES main.c)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/.gdbinit DESTINATION ${EXECUTABLE_OUTPUT_PATH})
@@ -85,8 +88,8 @@ add_dependencies(opencm3 opencm3_build)
 set_target_properties(opencm3 PROPERTIES IMPORTED_LOCATION
 ${OPENCM3_PATH}/lib/libopencm3_stm32f1.a
 INTERFACE_INCLUDE_DIRECTORIES ${OPENCM3_INC_DIRS})
-target_link_libraries(${PROJECT_NAME} opencm3)
 
+target_link_libraries(${PROJECT_NAME} opencm3 freertos_kernel)
 
 # Targets for make firmware in different formats
 set(BIN_TARGET "${EXECUTABLE_OUTPUT_PATH}/${TARGET_NAME}.bin")
