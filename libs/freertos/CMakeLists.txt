@@ -15,7 +15,7 @@ add_library (freertos_kernel
 	tasks.c
 	stream_buffer.c 
 	queue.c 
-	mpu_wrappers.c
+	#mpu_wrappers.c
 	list.c
 	event_groups.c
 	croutine.c

@@ -5,6 +5,17 @@
 #include <libopencmsis/core_cm3.h>
 //#include <libopencm3/stm32/spi.h>
 #include <libopencm3/stm32/usart.h>
+#include <FreeRTOS.h>
+#include <task.h>
+
+
+void hard_fault_handler() {
+	while (1) {
+		;
+	}
+}
+
+
 
 void delay(uint32_t ticks) {
 	for (int i=0; i<ticks; i++) {
@@ -85,6 +96,49 @@ void usart_print(const char *str) {
 	}
 }
 
+
+//arg -- параметр задаче (который нам нужен)
+void taskBlink(void *arg) {
+	rcc_periph_clock_enable(RCC_GPIOC);
+	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
+		GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
+	
+	//v -- void
+	//px -- pointer (void *)
+	//ul -- unsigned long
+	while (1) {
+		//ulTaskNotifyTake();
+
+		gpio_toggle(GPIOC, GPIO13);
+		vTaskDelay(1000); //1sec. delay
+	}
+}
+
+void taskControl(void *arg) {
+	rcc_periph_clock_enable(RCC_GPIOA);
+	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
+		GPIO_CNF_INPUT_PULL_UPDOWN, GPIO3|GPIO4|GPIO5);
+	//подтягивающие резисторы
+	gpio_set(GPIOA, GPIO3|GPIO4|GPIO5);
+
+	//опрос книпок
+	while (1) {
+		uint16_t state = 
+			gpio_get(GPIOA, GPIO3|GPIO4|GPIO5);
+		if (state & GPIO3) {
+			;
+		}
+		if (state & GPIO4) {
+			;
+		}
+		if (state & GPIO5) {
+			;
+		}
+		vTaskDelay(20); //20ms
+	}
+}
+
+
 int main(void) {
 	rcc_clock_setup_pll (&rcc_hse_configs [RCC_CLOCK_HSE8_72MHZ ]);
 
@@ -144,6 +198,7 @@ int main(void) {
 		SPI_CR1_MSBFIRST );
 	spi_enable(SPI1);
 */
+#if 0	
 	rcc_periph_clock_enable(RCC_GPIOC);
 	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
 		GPIO_CNF_OUTPUT_PUSHPULL, GPIO13); //PC13 LED
@@ -176,4 +231,11 @@ int main(void) {
 			usart_print("OK\r\n");
 		}
 	}
+#endif
+	//Task -- задача
+	//создаём таск
+	xTaskCreate(taskBlink, "blink", 256, NULL, 0, NULL);
+	//handle -- "ручка" управления таском
+	//передаём управление пранировщику задач
+	vTaskStartScheduler();
 }
