@@ -8,6 +8,8 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
+#include <semphr.h>
+#include <string.h>
 
 void hard_fault_handler() {
 	while (1) {
@@ -61,13 +63,47 @@ void cmd(uint8_t command) {
 	//
 }
 
-//static uint8_t Buffer[256] = {0};
-bool Command = false;
-bool LedState = false;
+static TaskHandle_t BlinkTaskHandle = NULL;
+static TaskHandle_t ControlHandle = NULL;
 
+static SemaphoreHandle_t Semphr = NULL;
+
+//bool Command = false;
+//bool LedState = false;
+
+#define BUFFER_SIZE 128
+
+#define NONE               0
+#define COMMAND            1
+#define ERROR_BUF_OVERFLOW 2
+
+#define TOGGLE_COMMAND     3
+
+
+static char Buffer[BUFFER_SIZE] = {0};
+static int pos = 0;
+//static MsgLen = 0;
+
+//ISR -- Interrupt Service Routine
+//Во FreeRTOS приоритет преррывания не выше приоритета планировщика!
 void usart1_isr (void) {
-	//USART1->SR в opencm3 вот так: 
-	//USART_SR(USART1)
+	BaseType_t woken = false;
+	if (USART_SR(USART1) & USART_SR_RXNE) {
+		uint8_t byte = usart_recv(USART1);
+		Buffer[pos] = byte;
+		pos++;
+		if (pos >= BUFFER_SIZE) {
+			xTaskNotifyFromISR(ControlHandle, ERROR_BUF_OVERFLOW, eSetValueWithOverwrite, 
+				&woken);
+		}
+		if (byte == '\r' || byte == '\n') {
+			xTaskNotifyFromISR(ControlHandle, COMMAND, eSetValueWithOverwrite, 
+				&woken);
+		}
+		portYIELD_FROM_ISR(woken);
+	}
+
+	/*
 	if (USART_SR(USART1) & USART_SR_RXNE) //RXNE -- not empty 
 	//т.е. пришёл байт
 	{
@@ -86,7 +122,8 @@ void usart1_isr (void) {
 			default:
 				;
 		}
-	}
+	}*/
+
 }
 
 void usart_print(const char *str) {
@@ -96,62 +133,76 @@ void usart_print(const char *str) {
 	}
 }
 
-
-static TaskHandle_t BlinkTaskHandle = NULL;
-
 //1. Очереди. Queue_t, xQueueHandle_t.
 //2. Оповещения Notification. uint32_t. 
 //3. Семафоры.
 //arg -- параметр задаче (который нам нужен)
 void taskBlink(void *arg) {
-	//BlinkTaskHandle = xTaskGetCurrentTaskHandle();
-
-	QueueHandle_t queue = (QueueHandle_t) arg;
-
 	rcc_periph_clock_enable(RCC_GPIOC);
 	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
 		GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
-	
-	//v -- void
-	//px -- pointer (void *)
-	//ul -- unsigned long
-	//TODO: добавить команды контроля периода
+
 	uint32_t command = 0;
 	bool blinkEnabled = false;
 	while (1) {
-		/*
-		if (xQueueReceive(queue, &command, 0) == pdTRUE) {
+		command = ulTaskNotifyTake(pdTRUE, 0);
+		if (command == TOGGLE_COMMAND)
 			blinkEnabled = !blinkEnabled;
-		}*/
-		if (ulTaskNotifyTake(pdTRUE, 0)) {
-			blinkEnabled = !blinkEnabled;
-		}
+
 		if (blinkEnabled) {
 			gpio_toggle(GPIOC, GPIO13);
 		}
-		vTaskDelay(200);
+		vTaskDelay(100);
 	}
 }
 
 void taskControl(void *arg) {
-	//QueueHandle_t queue = (QueueHandle_t) arg;
-
+	//USART1
 	rcc_periph_clock_enable(RCC_GPIOA);
+	rcc_periph_clock_enable(RCC_USART1);
+	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ, 
+		GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO9); //PA9 -- TX
 	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
-		GPIO_CNF_INPUT_PULL_UPDOWN, GPIO3|GPIO4|GPIO5);
-	//подтягивающие резисторы
-	gpio_set(GPIOA, GPIO3|GPIO4|GPIO5);
-
-	//опрос книпок
-	uint16_t prevState = gpio_get(GPIOA, GPIO3|GPIO4|GPIO5);
+		GPIO_CNF_INPUT_FLOAT, GPIO10); //PA10 -- RX
 	
+	usart_set_baudrate(USART1, 9600);
+	usart_set_mode(USART1, USART_MODE_TX_RX);
+	//usart_set_databits(USART1, 8);
+	usart_set_stopbits(USART1, USART_CR2_STOPBITS_1);
+	//прерывание в периферии вкл.
+	usart_enable_rx_interrupt(USART1);
+	//NVIC -- в ядре MCU
+	nvic_set_priority(NVIC_USART1_IRQ, 0xb0);
+	nvic_enable_irq(NVIC_USART1_IRQ);
+	usart_enable(USART1);
+
+	const char *toggleCmd = "toggle";
+
 	while (1) {
+		uint32_t value = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+		if (value == ERROR_BUF_OVERFLOW) {
+			usart_print("ERROR: Buffer overflow\r\n");
+		} else if (value == COMMAND) {
+			//Parse command
+			uint32_t commandType = 0;
+			if (strncmp(Buffer, toggleCmd, strlen(toggleCmd)) == 0) {
+				commandType = TOGGLE_COMMAND;
+			}
+			pos = 0;
+			if (commandType != 0) {
+				xTaskNotify(BlinkTaskHandle, commandType, eSetValueWithOverwrite);
+				usart_print("OK\r\n");
+			}
+		}
+		/*
+		//Управление кнопками
 		uint16_t state = 
 			gpio_get(GPIOA, GPIO3|GPIO4|GPIO5);
 		if (prevState & ~state ) { //high->low
 			uint32_t command = 1;
 			//BaseType_t result = xQueueSend(queue, &command, 1);
-			xTaskNotify(BlinkTaskHandle, command, eSetValueWithOverwrite);
+			//xTaskNotify(BlinkTaskHandle, command, eSetValueWithOverwrite);
+			xSemaphoreGive(Semphr);
 		}
 		if (state & GPIO4) {
 			;
@@ -161,6 +212,7 @@ void taskControl(void *arg) {
 		}
 		prevState = state;
 		vTaskDelay(20); //20ms
+		*/
 	}
 }
 
@@ -265,12 +317,13 @@ int main(void) {
 	}
 #endif
 	QueueHandle_t queue = xQueueCreate(10, sizeof(uint32_t));
+	Semphr = xSemaphoreCreateBinary();
 
 	//Task -- задача
 	//создаём таск
 	xTaskCreate(taskBlink, "blink", 256, queue, 0, &BlinkTaskHandle);
 
-	xTaskCreate(taskControl, "control", 256, queue, 0, NULL);
+	xTaskCreate(taskControl, "control", 256, queue, 0, &ControlHandle);
 
 	//handle -- "ручка" управления таском
 	//передаём управление пранировщику задач
