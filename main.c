@@ -112,11 +112,16 @@ void taskBlink(void *arg) {
 	//px -- pointer (void *)
 	//ul -- unsigned long
 	uint32_t command = 0;
+	bool blinkEnabled = false;
 	while (1) {
 		if (xQueueReceive(queue, &command, 0) == pdTRUE) {
+			//gpio_toggle(GPIOC, GPIO13);
+			blinkEnabled = !blinkEnabled;
+		}
+		if (blinkEnabled) {
 			gpio_toggle(GPIOC, GPIO13);
 		}
-		//vTaskDelay(1000); //1sec. delay
+		vTaskDelay(200);
 	}
 }
 
