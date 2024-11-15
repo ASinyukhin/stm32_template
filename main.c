@@ -7,7 +7,7 @@
 #include <libopencm3/stm32/usart.h>
 #include <FreeRTOS.h>
 #include <task.h>
-
+#include <queue.h>
 
 void hard_fault_handler() {
 	while (1) {
@@ -97,8 +97,13 @@ void usart_print(const char *str) {
 }
 
 
+//1. Очереди. Queue_t, xQueueHandle_t.
+//2. Оповещения Notification. uint32_t. 
+//3. Семафоры.
 //arg -- параметр задаче (который нам нужен)
 void taskBlink(void *arg) {
+	QueueHandle_t queue = (QueueHandle_t) arg;
+
 	rcc_periph_clock_enable(RCC_GPIOC);
 	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
 		GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
@@ -106,15 +111,18 @@ void taskBlink(void *arg) {
 	//v -- void
 	//px -- pointer (void *)
 	//ul -- unsigned long
+	uint32_t command = 0;
 	while (1) {
-		//ulTaskNotifyTake();
-
-		gpio_toggle(GPIOC, GPIO13);
-		vTaskDelay(1000); //1sec. delay
+		if (xQueueReceive(queue, &command, 0) == pdTRUE) {
+			gpio_toggle(GPIOC, GPIO13);
+		}
+		//vTaskDelay(1000); //1sec. delay
 	}
 }
 
 void taskControl(void *arg) {
+	QueueHandle_t queue = (QueueHandle_t) arg;
+
 	rcc_periph_clock_enable(RCC_GPIOA);
 	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
 		GPIO_CNF_INPUT_PULL_UPDOWN, GPIO3|GPIO4|GPIO5);
@@ -122,11 +130,13 @@ void taskControl(void *arg) {
 	gpio_set(GPIOA, GPIO3|GPIO4|GPIO5);
 
 	//опрос книпок
+	uint16_t prevState = gpio_get(GPIOA, GPIO3|GPIO4|GPIO5);
 	while (1) {
 		uint16_t state = 
 			gpio_get(GPIOA, GPIO3|GPIO4|GPIO5);
-		if (state & GPIO3) {
-			;
+		if (prevState & ~state ) { //high->low
+			uint32_t command = 1;
+			BaseType_t result = xQueueSend(queue, &command, 1);
 		}
 		if (state & GPIO4) {
 			;
@@ -134,10 +144,17 @@ void taskControl(void *arg) {
 		if (state & GPIO5) {
 			;
 		}
+		prevState = state;
 		vTaskDelay(20); //20ms
 	}
 }
 
+typedef struct {
+	int arg1;
+	int arg2;
+	char str[32];
+	QueueHandle_t q;
+}TaskArguments_T;
 
 int main(void) {
 	rcc_clock_setup_pll (&rcc_hse_configs [RCC_CLOCK_HSE8_72MHZ ]);
@@ -232,9 +249,14 @@ int main(void) {
 		}
 	}
 #endif
+	QueueHandle_t queue = xQueueCreate(10, sizeof(uint32_t));
+
 	//Task -- задача
 	//создаём таск
-	xTaskCreate(taskBlink, "blink", 256, NULL, 0, NULL);
+	xTaskCreate(taskBlink, "blink", 256, queue, 0, NULL);
+
+	xTaskCreate(taskControl, "control", 256, queue, 0, NULL);
+
 	//handle -- "ручка" управления таском
 	//передаём управление пранировщику задач
 	vTaskStartScheduler();
