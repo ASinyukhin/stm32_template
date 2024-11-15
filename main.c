@@ -97,11 +97,15 @@ void usart_print(const char *str) {
 }
 
 
+static TaskHandle_t BlinkTaskHandle = NULL;
+
 //1. Очереди. Queue_t, xQueueHandle_t.
 //2. Оповещения Notification. uint32_t. 
 //3. Семафоры.
 //arg -- параметр задаче (который нам нужен)
 void taskBlink(void *arg) {
+	//BlinkTaskHandle = xTaskGetCurrentTaskHandle();
+
 	QueueHandle_t queue = (QueueHandle_t) arg;
 
 	rcc_periph_clock_enable(RCC_GPIOC);
@@ -111,11 +115,15 @@ void taskBlink(void *arg) {
 	//v -- void
 	//px -- pointer (void *)
 	//ul -- unsigned long
+	//TODO: добавить команды контроля периода
 	uint32_t command = 0;
 	bool blinkEnabled = false;
 	while (1) {
+		/*
 		if (xQueueReceive(queue, &command, 0) == pdTRUE) {
-			//gpio_toggle(GPIOC, GPIO13);
+			blinkEnabled = !blinkEnabled;
+		}*/
+		if (ulTaskNotifyTake(pdTRUE, 0)) {
 			blinkEnabled = !blinkEnabled;
 		}
 		if (blinkEnabled) {
@@ -126,7 +134,7 @@ void taskBlink(void *arg) {
 }
 
 void taskControl(void *arg) {
-	QueueHandle_t queue = (QueueHandle_t) arg;
+	//QueueHandle_t queue = (QueueHandle_t) arg;
 
 	rcc_periph_clock_enable(RCC_GPIOA);
 	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
@@ -136,12 +144,14 @@ void taskControl(void *arg) {
 
 	//опрос книпок
 	uint16_t prevState = gpio_get(GPIOA, GPIO3|GPIO4|GPIO5);
+	
 	while (1) {
 		uint16_t state = 
 			gpio_get(GPIOA, GPIO3|GPIO4|GPIO5);
 		if (prevState & ~state ) { //high->low
 			uint32_t command = 1;
-			BaseType_t result = xQueueSend(queue, &command, 1);
+			//BaseType_t result = xQueueSend(queue, &command, 1);
+			xTaskNotify(BlinkTaskHandle, command, eSetValueWithOverwrite);
 		}
 		if (state & GPIO4) {
 			;
@@ -258,7 +268,7 @@ int main(void) {
 
 	//Task -- задача
 	//создаём таск
-	xTaskCreate(taskBlink, "blink", 256, queue, 0, NULL);
+	xTaskCreate(taskBlink, "blink", 256, queue, 0, &BlinkTaskHandle);
 
 	xTaskCreate(taskControl, "control", 256, queue, 0, NULL);
 
