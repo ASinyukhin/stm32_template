@@ -63,6 +63,7 @@ void adc_task(void *params) {
 	rcc_periph_clock_enable(RCC_ADC1);
 	//Max. ADC clk = 14Mhz по Даташиту
 	adc_power_off(ADC1); //выкл.
+	delay_us(1000);
 	rcc_set_adcpre(RCC_CFGR_ADCPRE_PCLK2_DIV8);
 	//init adc
 	//Регулярная группа каналов. До 8каналов из 16 доступных
@@ -75,6 +76,22 @@ void adc_task(void *params) {
 	adc_enable_external_trigger_regular(ADC1, ADC_CR2_EXTSEL_SWSTART);
 	//вкл. питание
 	adc_power_on(ADC1);
+	delay_us(1000);
+
+	uint16_t value = 0;
+
+	while (1) {
+		adc_start_conversion_regular(ADC1);
+		//EOC --End of Convertion
+		while (!adc_eoc(ADC1)) ;
+		//DR -- Один единственный регистр на все каналы по очереди
+		value = adc_read_regular(ADC1);
+		uint32_t voltage = (3300 * value) / 4096;
+		//3300мВ -- напряжение питания
+		//4096 -- полный диапазон ADC
+		
+		vTaskDelay(1000);
+	}
 }
 
 //arg -- параметр задаче (который нам нужен)
@@ -125,5 +142,8 @@ int main(void) {
 	}
 #endif
 	xTaskCreate(taskBlink, "blink", 256, NULL, 0, NULL);
+
+	xTaskCreate(adc_task, "ADC", 256, NULL, 0, NULL);
+
 	vTaskStartScheduler();
 }
