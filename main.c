@@ -92,6 +92,17 @@ void adc_task(void *params) {
 	adc_power_off(ADC1); //выкл.
 	delay_us(1000);
 	rcc_set_adcpre(RCC_CFGR_ADCPRE_PCLK2_DIV8);
+
+	adc_power_on(ADC1); //выкл.
+	adc_reset_calibration(ADC1);
+	adc_calibrate_async(ADC1); //стартуем калибровку
+	uint32_t cal_iteration = 0;
+	while (adc_is_calibrating(ADC1)) {
+		if (cal_iteration++ >= 100000) {
+			usart_print("Calibration timeout\r\n");
+			return;
+		}
+	}
 	//init adc
 	//Регулярная группа каналов. До 8каналов из 16 доступных
 	adc_set_regular_sequence(ADC1, 1, (uint8_t[]){ADC_CHANNEL0});
