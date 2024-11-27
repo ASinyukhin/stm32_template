@@ -3,7 +3,6 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencmsis/core_cm3.h>
-//#include <libopencm3/stm32/spi.h>
 #include <libopencm3/stm32/usart.h>
 #include <FreeRTOS.h>
 #include <task.h>
@@ -11,14 +10,6 @@
 
 void hard_fault_handler() {
 	while (1) {
-		;
-	}
-}
-
-
-
-void delay(uint32_t ticks) {
-	for (int i=0; i<ticks; i++) {
 		;
 	}
 }
@@ -55,40 +46,6 @@ void delay_ms(uint32_t ms) {
 	//Упрощённо: delay_us(ms * 1000);
 }
 
-void cmd(uint8_t command) {
-	//gpio_set(); //RS
-	//spi_send();
-	//
-}
-
-//static uint8_t Buffer[256] = {0};
-bool Command = false;
-bool LedState = false;
-
-void usart1_isr (void) {
-	//USART1->SR в opencm3 вот так: 
-	//USART_SR(USART1)
-	if (USART_SR(USART1) & USART_SR_RXNE) //RXNE -- not empty 
-	//т.е. пришёл байт
-	{
-		uint8_t byte = usart_recv(USART1);
-		switch (byte) {
-			case 'E':
-			case 'e':
-				LedState = true;
-				Command = true;
-				break;
-			case 'D':
-			case 'd':
-				LedState = false;
-				Command = true;
-				break;
-			default:
-				;
-		}
-	}
-}
-
 void usart_print(const char *str) {
 	while (*str != '\0') {
 		usart_send_blocking(USART1, *str);
@@ -102,103 +59,15 @@ void taskBlink(void *arg) {
 	rcc_periph_clock_enable(RCC_GPIOC);
 	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
 		GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
-	
-	//v -- void
-	//px -- pointer (void *)
-	//ul -- unsigned long
 	while (1) {
-		//ulTaskNotifyTake();
-
 		gpio_toggle(GPIOC, GPIO13);
 		vTaskDelay(1000); //1sec. delay
 	}
 }
 
-void taskControl(void *arg) {
-	rcc_periph_clock_enable(RCC_GPIOA);
-	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
-		GPIO_CNF_INPUT_PULL_UPDOWN, GPIO3|GPIO4|GPIO5);
-	//подтягивающие резисторы
-	gpio_set(GPIOA, GPIO3|GPIO4|GPIO5);
-
-	//опрос книпок
-	while (1) {
-		uint16_t state = 
-			gpio_get(GPIOA, GPIO3|GPIO4|GPIO5);
-		if (state & GPIO3) {
-			;
-		}
-		if (state & GPIO4) {
-			;
-		}
-		if (state & GPIO5) {
-			;
-		}
-		vTaskDelay(20); //20ms
-	}
-}
-
-
 int main(void) {
 	rcc_clock_setup_pll (&rcc_hse_configs [RCC_CLOCK_HSE8_72MHZ ]);
-
-#if 0
-	rcc_periph_clock_enable(RCC_GPIOC);
-	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
-		GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
-
-	//PA 3,4,5 -- на вход!
-	rcc_periph_clock_enable(RCC_GPIOA);
-	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
-		GPIO_CNF_INPUT_PULL_UPDOWN, GPIO3|GPIO4|GPIO5);
-	//подтягивающие резисторы
-	gpio_set(GPIOA, GPIO3|GPIO4|GPIO5);
-
-	const uint32_t t1 = 500; //led switch period
-	const uint32_t t2 = 50;  //button check period
-	uint32_t p[2] = {t1, t2};
-	
-	bool prevButtonState = gpio_get(GPIOA, GPIO5);
-	bool ledBlink = true;
-	while (1) {
-		uint32_t tau = MIN(p[0], p[1]);
-		delay_ms(tau);
-		for (int i=0; i<2; i++) {
-			p[i] -= tau;
-		}
-		if (p[0] == 0) {
-			if (ledBlink)
-				gpio_toggle(GPIOC, GPIO13);
-			p[0] = t1;
-		}
-		if (p[1] == 0) {
-			bool newState = gpio_get(GPIOA, GPIO5);
-			if (!newState && prevButtonState)
-				ledBlink = !ledBlink; //switch led blink
-			prevButtonState = newState;
-			p[1] = t2;
-		}
-	}
-#endif
-/*
-	rcc_periph_clock_enable(RCC_GPIOA);
-	rcc_periph_clock_enable(RCC_SPI1);
-	//MISO, MOSI, CLK, NSS, RS, RSE
-	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ,
-	 GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO7);
-	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ,
-	 GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO5);
-	//CS -- Chip select
-	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
-	 GPIO_CNF_OUTPUT_PUSHPULL, GPIO1|GPIO2|GPIO3);
-
-	//SPI
-	spi_init_master(SPI1, SPI_CR1_BR_FPCLK_DIV_64, 
-		SPI_CR1_CPOL, SPI_CR1_CPHA, SPI_CR1_DFF_8BIT,
-		SPI_CR1_MSBFIRST );
-	spi_enable(SPI1);
-*/
-#if 0	
+#if 0	//Uart
 	rcc_periph_clock_enable(RCC_GPIOC);
 	gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, 
 		GPIO_CNF_OUTPUT_PUSHPULL, GPIO13); //PC13 LED
@@ -232,10 +101,6 @@ int main(void) {
 		}
 	}
 #endif
-	//Task -- задача
-	//создаём таск
 	xTaskCreate(taskBlink, "blink", 256, NULL, 0, NULL);
-	//handle -- "ручка" управления таском
-	//передаём управление пранировщику задач
 	vTaskStartScheduler();
 }
