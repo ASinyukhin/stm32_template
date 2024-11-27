@@ -53,8 +53,35 @@ void usart_print(const char *str) {
 	}
 }
 
+char * uint16tohex(char *buffer, uint16_t value) {
+	for (int i=3; i>=0; i--) {
+		uint32_t nibble = (value >> i*4) & 0xF;
+		if (nibble <= 9)
+			*buffer = nibble + '0';
+		else //nibble >9
+			*buffer = (nibble - 10) + 'a';
+		buffer++;
+	}
+	return buffer;
+}
+
+void init_uart() {
+	rcc_periph_clock_enable(RCC_GPIOA);
+	rcc_periph_clock_enable(RCC_USART1);
+	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ, 
+		GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO9); //PA9 -- TX
+	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
+		GPIO_CNF_INPUT_FLOAT, GPIO10); //PA10 -- RX
+	usart_set_baudrate(USART1, 9600);
+	usart_set_mode(USART1, USART_MODE_TX_RX);
+	//usart_set_databits(USART1, 8);
+	usart_set_stopbits(USART1, USART_CR2_STOPBITS_1);
+	usart_enable(USART1);
+}
 
 void adc_task(void *params) {
+	init_uart();
+
 	//Pa0
 	rcc_periph_clock_enable(RCC_GPIOA);
 	rcc_periph_clock_enable(RCC_AFIO); //?
@@ -89,8 +116,14 @@ void adc_task(void *params) {
 		uint32_t voltage = (3300 * value) / 4096;
 		//3300мВ -- напряжение питания
 		//4096 -- полный диапазон ADC
-		
-		vTaskDelay(1000);
+		//выведем в uart
+		char buffer[32] = {0};
+		uint16tohex(buffer, value);
+
+		usart_print(buffer);
+		usart_print("\r\n");
+
+		vTaskDelay(100);
 	}
 }
 
