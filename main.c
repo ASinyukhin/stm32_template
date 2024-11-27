@@ -6,7 +6,7 @@
 #include <libopencm3/stm32/usart.h>
 #include <FreeRTOS.h>
 #include <task.h>
-
+#include <libopencm3/stm32/adc.h>
 
 void hard_fault_handler() {
 	while (1) {
@@ -53,6 +53,29 @@ void usart_print(const char *str) {
 	}
 }
 
+
+void adc_task(void *params) {
+	//Pa0
+	rcc_periph_clock_enable(RCC_GPIOA);
+	rcc_periph_clock_enable(RCC_AFIO); //?
+	gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
+		GPIO_CNF_INPUT_ANALOG, GPIO0);
+	rcc_periph_clock_enable(RCC_ADC1);
+	//Max. ADC clk = 14Mhz по Даташиту
+	adc_power_off(ADC1); //выкл.
+	rcc_set_adcpre(RCC_CFGR_ADCPRE_PCLK2_DIV8);
+	//init adc
+	//Регулярная группа каналов. До 8каналов из 16 доступных
+	adc_set_regular_sequence(ADC1, 1, (uint8_t[]){ADC_CHANNEL0});
+	//Частота сэмплирования хитрая! В клоках, а не во времени!
+	adc_set_sample_time(ADC1, 0, ADC_SMPR_SMP_239DOT5CYC );
+	//F_adc / (smpr + 12.5)
+	//External trigger
+	//EXTSEL SWSTART -- Триггер ручного запуска ADC
+	adc_enable_external_trigger_regular(ADC1, ADC_CR2_EXTSEL_SWSTART);
+	//вкл. питание
+	adc_power_on(ADC1);
+}
 
 //arg -- параметр задаче (который нам нужен)
 void taskBlink(void *arg) {
