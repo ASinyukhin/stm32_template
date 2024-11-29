@@ -79,6 +79,25 @@ void init_uart() {
 	usart_enable(USART1);
 }
 
+#define ADC_BUF_SIZE 1024
+static uint16_t ADCBuffer[ADC_BUF_SIZE] = {0};
+static uint16_t ADCBufPos = 0;
+static bool Complete = false;
+
+void adc1_2_isr() {
+	if (adc_eoc(ADC1)) {
+		uint16_t value = adc_read_regular(ADC1);
+		ADCBuffer[ADCBufPos] = value;
+		ADCBufPos = (ADCBufPos + 1)%ADC_BUF_SIZE;
+	}
+	if (ADCBufPos >= 1023) {
+		adc_power_off(ADC1);
+		Complete = true;
+	}
+
+	ADC_SR(ADC1) = 0; //Сброс флага прерывания
+}
+
 void adc_task(void *params) {
 	init_uart();
 
@@ -103,6 +122,7 @@ void adc_task(void *params) {
 			return;
 		}
 	}
+	adc_power_off(ADC1); //выкл.
 	//init adc
 	//Регулярная группа каналов. До 8каналов из 16 доступных
 	adc_set_regular_sequence(ADC1, 1, (uint8_t[]){ADC_CHANNEL0});
@@ -112,13 +132,20 @@ void adc_task(void *params) {
 	//External trigger
 	//EXTSEL SWSTART -- Триггер ручного запуска ADC
 	adc_enable_external_trigger_regular(ADC1, ADC_CR2_EXTSEL_SWSTART);
+	adc_set_continuous_conversion_mode(ADC1); //вкл. непрерывный режим
+	adc_enable_eoc_interrupt(ADC1);
 	//вкл. питание
 	adc_power_on(ADC1);
+	nvic_enable_irq(NVIC_ADC1_2_IRQ);
+	nvic_set_priority(NVIC_ADC1_2_IRQ, 0);
 	delay_us(1000);
 
 	uint16_t value = 0;
+	adc_power_on(ADC1);
+	adc_start_conversion_regular(ADC1);
 
 	while (1) {
+		/*
 		adc_start_conversion_regular(ADC1);
 		//EOC --End of Convertion
 		while (!adc_eoc(ADC1)) ;
@@ -133,7 +160,11 @@ void adc_task(void *params) {
 
 		usart_print(buffer);
 		usart_print("\r\n");
-
+		*/
+		if (Complete) {
+			usart_print("Complete\r\n");
+			Complete = false;
+		}
 		vTaskDelay(100);
 	}
 }
